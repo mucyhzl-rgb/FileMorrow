@@ -300,56 +300,30 @@ private struct DuplicateCenterView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Exact Duplicates").font(.title2.bold())
-                    Text("Every accessible folder inside Downloads is checked read-only. SHA-256 verifies identical bytes; only copies you confirm move to recoverable Trash.")
-                        .foregroundStyle(.secondary)
-                    Label(
-                        "Nested project and app files can be intentionally identical. Review every full path before using Trash.",
-                        systemImage: "exclamationmark.triangle.fill"
-                    )
-                    .font(.caption)
-                    .foregroundStyle(.orange)
-                }
-                Spacer()
-                if state.isScanningDuplicates {
-                    Button("Stop Scan", role: .cancel) {
-                        state.cancelDuplicateScan()
-                    }
-                    .buttonStyle(.bordered)
-                } else {
-                    Button("Find Duplicates") {
-                        state.startDuplicateScan()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .disabled(state.isWorking)
-                }
-            }
-            .padding(20)
+            CleanupHeader(
+                title: "Exact Duplicates",
+                subtitle: "Every accessible folder inside Downloads is checked read-only. SHA-256 verifies identical bytes; only copies you confirm move to recoverable Trash.",
+                caution: "Nested project and app files can be intentionally identical. Review every full path before using Trash.",
+                summary: state.duplicateGroups.isEmpty
+                    ? nil
+                    : "\(state.duplicateExtraCount) extra copies • \(ByteCountFormatter.string(fromByteCount: state.duplicateWastedSize, countStyle: .file)) reclaimable",
+                isScanning: state.isScanningDuplicates,
+                actionTitle: "Find Duplicates",
+                cancelTitle: "Stop Scan",
+                isDisabled: state.isWorking,
+                onScan: { state.startDuplicateScan() },
+                onCancel: { state.cancelDuplicateScan() }
+            )
 
             Divider()
 
             if state.isScanningDuplicates, let scan = state.duplicateScanProgress {
-                VStack(spacing: 14) {
-                    ProgressView(value: scan.fraction)
-                        .frame(maxWidth: 420)
-                    Text(scan.stage.rawValue)
-                        .font(.headline)
-                    Text("\(scan.completedFiles.formatted()) of \(scan.totalFiles.formatted()) checks")
-                        .foregroundStyle(.secondary)
-                    if let current = scan.currentFile {
-                        Text(current)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
-                    Text(ByteCountFormatter.string(fromByteCount: scan.processedBytes, countStyle: .file) + " read")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.tertiary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding()
+                CleanupProgressView(
+                    fraction: scan.fraction,
+                    headline: scan.stage.rawValue,
+                    detail: "\(scan.completedFiles.formatted()) of \(scan.totalFiles.formatted()) checks • \(ByteCountFormatter.string(fromByteCount: scan.processedBytes, countStyle: .file)) read",
+                    currentItem: scan.currentFile
+                )
             } else if state.duplicateGroups.isEmpty {
                 ContentUnavailableView(
                     "No duplicate scan results",
@@ -423,9 +397,11 @@ private struct DuplicateCenterView: View {
 private struct CleanupHeader: View {
     let title: String
     let subtitle: String
+    var caution: String? = nil
     let summary: String?
     let isScanning: Bool
     let actionTitle: String
+    var cancelTitle: String = "Stop Check"
     let isDisabled: Bool
     let onScan: () -> Void
     let onCancel: () -> Void
@@ -435,6 +411,11 @@ private struct CleanupHeader: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title).font(.title2.bold())
                 Text(subtitle).foregroundStyle(.secondary)
+                if let caution {
+                    Label(caution, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
                 if let summary {
                     Label(summary, systemImage: "internaldrive")
                         .font(.caption.weight(.medium))
@@ -443,7 +424,7 @@ private struct CleanupHeader: View {
             }
             Spacer()
             if isScanning {
-                Button("Stop Check", role: .cancel, action: onCancel)
+                Button(cancelTitle, role: .cancel, action: onCancel)
                     .buttonStyle(.bordered)
             } else {
                 Button(actionTitle, action: onScan)
