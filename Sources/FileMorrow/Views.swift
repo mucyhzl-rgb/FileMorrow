@@ -119,7 +119,9 @@ struct SidebarView: View {
             get: { state.ageSelection },
             set: { selection in
                 state.ageSelection = selection
-                if selection != .duplicates, selection != .extracted { state.categoryFilter = nil }
+                if ![.duplicates, .extracted, .installers].contains(selection) {
+                    state.categoryFilter = nil
+                }
             }
         )) {
             Section("Fresh") {
@@ -150,6 +152,13 @@ struct SidebarView: View {
                     count: state.extractedArchiveCount
                 )
                 .tag(AgeView.extracted)
+
+                SidebarRow(
+                    title: AgeView.installers.rawValue,
+                    icon: AgeView.installers.icon,
+                    count: state.redundantInstallerCount
+                )
+                .tag(AgeView.installers)
             }
 
             Section("Categories") {
@@ -183,6 +192,14 @@ struct SidebarView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
+                if state.totalReclaimableSize > 0 {
+                    Label(
+                        "\(ByteCountFormatter.string(fromByteCount: state.totalReclaimableSize, countStyle: .file)) reclaimable",
+                        systemImage: "internaldrive"
+                    )
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.indigo)
+                }
             }
             .padding()
             .background(.ultraThinMaterial)
@@ -220,6 +237,8 @@ struct FileListView: View {
                 DuplicateCenterView(state: state)
             } else if state.ageSelection == .extracted {
                 ExtractedArchiveCenterView(state: state)
+            } else if state.ageSelection == .installers {
+                InstallerCenterView(state: state)
             } else {
                 VStack(spacing: 0) {
                     DashboardHeader(state: state)
@@ -399,6 +418,228 @@ private struct DuplicateCenterView: View {
     }
 }
 
+/// Shared chrome for the Reclaim Space workflows, so the duplicate, archive,
+/// and installer screens read as one feature rather than three.
+private struct CleanupHeader: View {
+    let title: String
+    let subtitle: String
+    let summary: String?
+    let isScanning: Bool
+    let actionTitle: String
+    let isDisabled: Bool
+    let onScan: () -> Void
+    let onCancel: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title).font(.title2.bold())
+                Text(subtitle).foregroundStyle(.secondary)
+                if let summary {
+                    Label(summary, systemImage: "internaldrive")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.indigo)
+                }
+            }
+            Spacer()
+            if isScanning {
+                Button("Stop Check", role: .cancel, action: onCancel)
+                    .buttonStyle(.bordered)
+            } else {
+                Button(actionTitle, action: onScan)
+                    .buttonStyle(.borderedProminent)
+                    .disabled(isDisabled)
+            }
+        }
+        .padding(20)
+    }
+}
+
+private struct CleanupProgressView: View {
+    let fraction: Double?
+    let headline: String
+    let detail: String
+    let currentItem: String?
+
+    var body: some View {
+        VStack(spacing: 14) {
+            ProgressView(value: fraction)
+                .frame(maxWidth: 420)
+            Text(headline).font(.headline)
+            Text(detail).foregroundStyle(.secondary)
+            if let currentItem {
+                Text(currentItem)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding()
+    }
+}
+
+private struct CleanupSelectionFooter: View {
+    let selectedCount: Int
+    let totalCount: Int
+    let selectedSize: Int64
+    let actionTitle: String
+    let isDisabled: Bool
+    let onToggleAll: () -> Void
+    let onAction: () -> Void
+
+    var body: some View {
+        HStack {
+            Button(selectedCount == totalCount ? "Deselect All" : "Select All", action: onToggleAll)
+                .buttonStyle(.link)
+
+            Spacer()
+
+            if selectedCount > 0 {
+                Text("\(selectedCount) selected • \(ByteCountFormatter.string(fromByteCount: selectedSize, countStyle: .file))")
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+
+            Button(actionTitle, role: .destructive, action: onAction)
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
+                .disabled(isDisabled)
+        }
+        .padding(16)
+        .background(.ultraThinMaterial)
+    }
+}
+
+private struct InstallerCenterView: View {
+    @Bindable var state: AppState
+    @State private var selection: Set<String> = []
+    @State private var showConfirmation = false
+
+    private var selected: [RedundantInstaller] {
+        state.redundantInstallers.filter { selection.contains($0.id) }
+    }
+
+    private var selectedSize: Int64 {
+        selected.reduce(0) { $0 + $1.installerSize }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            CleanupHeader(
+                title: "Installers",
+                subtitle: "Finds .dmg and .pkg installers whose software is already on this Mac. Packages are checked against the install receipts macOS keeps; disk images are matched to the app in Applications. Nothing is mounted, opened, or run.",
+                summary: state.redundantInstallers.isEmpty
+                    ? nil
+                    : "\(state.redundantInstallerCount) already used • \(ByteCountFormatter.string(fromByteCount: state.redundantInstallerReclaimableSize, countStyle: .file)) reclaimable",
+                isScanning: state.isScanningInstallers,
+                actionTitle: "Check Installers",
+                isDisabled: state.isWorking,
+                onScan: { state.startInstallerScan() },
+                onCancel: { state.cancelInstallerScan() }
+            )
+            Divider()
+            content
+        }
+        .confirmationDialog(
+            "Move \(selected.count) used \(selected.count == 1 ? "installer" : "installers") to Trash?",
+            isPresented: $showConfirmation
+        ) {
+            Button("Move to Trash", role: .destructive) {
+                let installers = selected
+                Task {
+                    await state.trashInstallers(installers)
+                    selection.removeAll()
+                }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("The installed software is not touched. Only the installer files move to recoverable macOS Trash, and they can be downloaded again at any time. An installer newer than what is installed is never listed here.")
+        }
+        .onChange(of: state.redundantInstallers) { _, installers in
+            selection.formIntersection(Set(installers.map(\.id)))
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if state.isScanningInstallers, let scan = state.installerScanProgress {
+            CleanupProgressView(
+                fraction: scan.fraction,
+                headline: "Checking installers",
+                detail: "\(scan.completedInstallers.formatted()) of \(scan.totalInstallers.formatted()) installers",
+                currentItem: scan.currentInstaller
+            )
+        } else if state.redundantInstallers.isEmpty {
+            ContentUnavailableView(
+                state.hasScannedInstallers ? "No used installers" : "No installer check yet",
+                systemImage: "shippingbox",
+                description: Text(
+                    state.hasScannedInstallers
+                        ? "Every installer in Downloads is either for software that is not installed, or newer than what is installed."
+                        : "Run a check to find .dmg and .pkg files for software you have already installed."
+                )
+            )
+        } else {
+            VStack(spacing: 0) {
+                List(state.redundantInstallers, selection: $selection) { installer in
+                    HStack(spacing: 12) {
+                        Image(systemName: "shippingbox.fill")
+                            .foregroundStyle(.indigo)
+                            .font(.title3)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(installer.name).fontWeight(.medium)
+                            HStack(spacing: 6) {
+                                Text(installer.evidence.rawValue)
+                                    .font(.caption2.weight(.medium))
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 3)
+                                    .background(
+                                        (installer.evidence == .packageReceipt ? Color.green : Color.indigo)
+                                            .opacity(0.12),
+                                        in: Capsule()
+                                    )
+                                    .foregroundStyle(installer.evidence == .packageReceipt ? .green : .indigo)
+                                Text(installer.comparison.summary)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Text("\(installer.installedLocation) • \(installer.versionSummary)")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                                .lineLimit(1)
+                                .textSelection(.enabled)
+                        }
+                        Spacer()
+                        Text(ByteCountFormatter.string(fromByteCount: installer.installerSize, countStyle: .file))
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                    .padding(.vertical, 6)
+                    .tag(installer.id)
+                }
+                .listStyle(.inset)
+
+                Divider()
+
+                CleanupSelectionFooter(
+                    selectedCount: selection.count,
+                    totalCount: state.redundantInstallers.count,
+                    selectedSize: selectedSize,
+                    actionTitle: "Move \(selection.count) to Trash",
+                    isDisabled: selection.isEmpty || state.isWorking,
+                    onToggleAll: {
+                        selection = selection.count == state.redundantInstallers.count
+                            ? []
+                            : Set(state.redundantInstallers.map(\.id))
+                    },
+                    onAction: { showConfirmation = true }
+                )
+            }
+        }
+    }
+}
+
 private struct ExtractedArchiveCenterView: View {
     @Bindable var state: AppState
     @State private var selection: Set<String> = []
@@ -414,7 +655,18 @@ private struct ExtractedArchiveCenterView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
+            CleanupHeader(
+                title: "Extracted Archives",
+                subtitle: "Finds ZIP files whose contents are already unpacked next to them. Every entry must match the unpacked file byte-for-byte in size before an archive is listed here.",
+                summary: state.extractedArchives.isEmpty
+                    ? nil
+                    : "\(state.extractedArchiveCount) unpacked • \(ByteCountFormatter.string(fromByteCount: state.extractedArchiveReclaimableSize, countStyle: .file)) reclaimable",
+                isScanning: state.isScanningExtractedArchives,
+                actionTitle: "Check Archives",
+                isDisabled: state.isWorking,
+                onScan: { state.startExtractedArchiveScan() },
+                onCancel: { state.cancelExtractedArchiveScan() }
+            )
             Divider()
             content
         }
@@ -439,57 +691,15 @@ private struct ExtractedArchiveCenterView: View {
         }
     }
 
-    private var header: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Extracted Archives").font(.title2.bold())
-                Text("Finds ZIP files whose contents are already unpacked next to them. Every entry must match the unpacked file byte-for-byte in size before an archive is listed here.")
-                    .foregroundStyle(.secondary)
-                if !state.extractedArchives.isEmpty {
-                    Label(
-                        "\(state.extractedArchiveCount) unpacked • \(ByteCountFormatter.string(fromByteCount: state.extractedArchiveReclaimableSize, countStyle: .file)) reclaimable",
-                        systemImage: "internaldrive"
-                    )
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.indigo)
-                }
-            }
-            Spacer()
-            if state.isScanningExtractedArchives {
-                Button("Stop Check", role: .cancel) {
-                    state.cancelExtractedArchiveScan()
-                }
-                .buttonStyle(.bordered)
-            } else {
-                Button("Check Archives") {
-                    state.startExtractedArchiveScan()
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(state.isWorking)
-            }
-        }
-        .padding(20)
-    }
-
     @ViewBuilder
     private var content: some View {
         if state.isScanningExtractedArchives, let scan = state.extractedArchiveScanProgress {
-            VStack(spacing: 14) {
-                ProgressView(value: scan.fraction)
-                    .frame(maxWidth: 420)
-                Text("Verifying archive contents")
-                    .font(.headline)
-                Text("\(scan.completedArchives.formatted()) of \(scan.totalArchives.formatted()) archives")
-                    .foregroundStyle(.secondary)
-                if let current = scan.currentArchive {
-                    Text(current)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .padding()
+            CleanupProgressView(
+                fraction: scan.fraction,
+                headline: "Verifying archive contents",
+                detail: "\(scan.completedArchives.formatted()) of \(scan.totalArchives.formatted()) archives",
+                currentItem: scan.currentArchive
+            )
         } else if state.extractedArchives.isEmpty {
             ContentUnavailableView(
                 state.hasScannedExtractedArchives ? "No unpacked archives" : "No archive check yet",
@@ -532,31 +742,19 @@ private struct ExtractedArchiveCenterView: View {
 
                 Divider()
 
-                HStack {
-                    Button(selection.count == state.extractedArchives.count ? "Deselect All" : "Select All") {
+                CleanupSelectionFooter(
+                    selectedCount: selection.count,
+                    totalCount: state.extractedArchives.count,
+                    selectedSize: selectedSize,
+                    actionTitle: "Move \(selection.count) to Trash",
+                    isDisabled: selection.isEmpty || state.isWorking,
+                    onToggleAll: {
                         selection = selection.count == state.extractedArchives.count
                             ? []
                             : Set(state.extractedArchives.map(\.id))
-                    }
-                    .buttonStyle(.link)
-
-                    Spacer()
-
-                    if !selection.isEmpty {
-                        Text("\(selection.count) selected • \(ByteCountFormatter.string(fromByteCount: selectedSize, countStyle: .file))")
-                            .foregroundStyle(.secondary)
-                            .monospacedDigit()
-                    }
-
-                    Button("Move \(selection.count) to Trash", role: .destructive) {
-                        showConfirmation = true
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.red)
-                    .disabled(selection.isEmpty || state.isWorking)
-                }
-                .padding(16)
-                .background(.ultraThinMaterial)
+                    },
+                    onAction: { showConfirmation = true }
+                )
             }
         }
     }

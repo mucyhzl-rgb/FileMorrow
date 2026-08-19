@@ -1,5 +1,7 @@
 import Foundation
+#if canImport(FoundationModels)
 import FoundationModels
+#endif
 
 enum IntelligenceAvailabilityState: String, CaseIterable, Sendable {
     case checking
@@ -7,8 +9,11 @@ enum IntelligenceAvailabilityState: String, CaseIterable, Sendable {
     case appleIntelligenceNotEnabled
     case deviceNotEligible
     case modelNotReady
+    case systemTooOld
     case unknown
 
+    #if canImport(FoundationModels)
+    @available(macOS 26, *)
     init(_ availability: SystemLanguageModel.Availability) {
         switch availability {
         case .available:
@@ -23,6 +28,7 @@ enum IntelligenceAvailabilityState: String, CaseIterable, Sendable {
             self = .unknown
         }
     }
+    #endif
 
     var isReady: Bool { self == .available }
 
@@ -33,6 +39,7 @@ enum IntelligenceAvailabilityState: String, CaseIterable, Sendable {
         case .appleIntelligenceNotEnabled: "Apple Intelligence is off"
         case .deviceNotEligible: "This Mac is not eligible"
         case .modelNotReady: "The on-device model is not ready"
+        case .systemTooOld: "Smart Content needs macOS 26"
         case .unknown: "Apple Intelligence is unavailable"
         }
     }
@@ -49,6 +56,8 @@ enum IntelligenceAvailabilityState: String, CaseIterable, Sendable {
             "Smart Content requires macOS 26 and an Apple Intelligence-eligible Mac. Format mode remains fully available."
         case .modelNotReady:
             "The model may still be downloading or temporarily unavailable. Format mode remains fully available."
+        case .systemTooOld:
+            "This Mac runs an earlier macOS, so the on-device model is not present. Format mode organizes everything by file type and needs no model."
         case .unknown:
             "FileMorrow could not confirm model availability. Format mode remains fully available."
         }

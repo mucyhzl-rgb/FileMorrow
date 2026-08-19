@@ -4,6 +4,17 @@ All notable FileMorrow changes are documented here.
 
 ## 1.8.0 — 2026-08-20
 
+- Lower the requirement to macOS 14 Sonoma. Foundation Models is weak-linked
+  and only called on macOS 26, so every workflow except Smart Content now runs
+  on far more Macs, and the app launches normally where the framework does not
+  exist.
+- Add Installers: find .dmg and .pkg files for software already on this Mac.
+  Packages are verified against the install receipts macOS keeps; disk images
+  are matched to the installed app and its version. An installer newer than
+  what is installed is never listed, so a pending update is never deleted.
+  Nothing is mounted, opened, or run, and installed software is never touched.
+- Show total reclaimable space across duplicates, archives, and installers in
+  the sidebar and the menu-bar companion.
 - Add Extracted Archives: find ZIP files whose contents are already unpacked
   next to them and move just the archive to recoverable Trash. Every entry must
   match the unpacked file's size before an archive is listed, the archive is

@@ -64,26 +64,12 @@ actor ExtractedArchiveScanner {
     // MARK: - Discovery
 
     /// Top-level ZIPs in Downloads, plus ZIPs already filed into a managed
-    /// category folder. Arbitrary user folders are never walked.
+    /// category folder.
     private func archiveURLs(root: URL, profile: OrganizationProfile) -> [URL] {
-        var folders = [root]
-        for definition in profile.enabledCategories where definition.category != .needsReview {
-            let folder = root.appending(path: definition.folderName, directoryHint: .isDirectory)
-            if AppSupportPaths.hasManagedMarker(in: folder) { folders.append(folder) }
-        }
-
-        return folders.flatMap { folder -> [URL] in
-            let contents = (try? FileManager.default.contentsOfDirectory(
-                at: folder,
-                includingPropertiesForKeys: [.isRegularFileKey],
-                options: [.skipsHiddenFiles]
-            )) ?? []
-            return contents.filter {
-                $0.pathExtension.lowercased() == "zip"
-                    && (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true
-            }
-        }
-        .sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
+        DownloadsFolders.files(
+            in: DownloadsFolders.managedScanRoots(root: root, profile: profile),
+            extensions: ["zip"]
+        )
     }
 
     private func extractedArchive(at archive: URL, root: URL) -> ExtractedArchive? {

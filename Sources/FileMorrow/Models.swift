@@ -123,6 +123,7 @@ enum AgeView: String, CaseIterable, Identifiable {
     case all = "All Downloads"
     case duplicates = "Duplicates"
     case extracted = "Extracted Archives"
+    case installers = "Installers"
 
     var id: String { rawValue }
 
@@ -135,6 +136,7 @@ enum AgeView: String, CaseIterable, Identifiable {
         case .all: "tray.full.fill"
         case .duplicates: "doc.on.doc.fill"
         case .extracted: "archivebox.fill"
+        case .installers: "shippingbox.fill"
         }
     }
 }
@@ -275,5 +277,69 @@ struct ExtractedArchiveScanProgress: Sendable {
     var fraction: Double? {
         guard totalArchives > 0 else { return nil }
         return min(1, Double(completedArchives) / Double(totalArchives))
+    }
+}
+
+/// How a downloaded installer's version relates to what is installed.
+enum VersionComparison: String, Sendable {
+    /// The Mac already runs a newer build, typically because the app updated
+    /// itself after this installer was downloaded.
+    case installedIsNewer
+    case sameVersion
+    /// A pending update. These are never offered for cleanup.
+    case installerIsNewer
+    case unknownVersion
+
+    var summary: String {
+        switch self {
+        case .installedIsNewer: "Already updated past this version"
+        case .sameVersion: "Same version already installed"
+        case .installerIsNewer: "Newer than what is installed"
+        case .unknownVersion: "Already installed"
+        }
+    }
+}
+
+/// A `.dmg` or `.pkg` in Downloads whose software is already on this Mac.
+struct RedundantInstaller: Identifiable, Hashable, Sendable {
+    enum Evidence: String, Sendable {
+        case packageReceipt = "Verified by install receipt"
+        case installedApp = "Matched to an installed app"
+    }
+
+    let installerURL: URL
+    let installerSize: Int64
+    let installerVersion: String?
+    let installedName: String
+    let installedLocation: String
+    let installedVersion: String?
+    let evidence: Evidence
+    let comparison: VersionComparison
+
+    var id: String { installerURL.path }
+    var name: String { installerURL.lastPathComponent }
+
+    var versionSummary: String {
+        switch (installerVersion, installedVersion) {
+        case let (installer?, installed?):
+            "Installer \(installer) • installed \(installed)"
+        case let (nil, installed?):
+            "Installed \(installed)"
+        case let (installer?, nil):
+            "Installer \(installer)"
+        default:
+            comparison.summary
+        }
+    }
+}
+
+struct InstallerScanProgress: Sendable {
+    let completedInstallers: Int
+    let totalInstallers: Int
+    let currentInstaller: String?
+
+    var fraction: Double? {
+        guard totalInstallers > 0 else { return nil }
+        return min(1, Double(completedInstallers) / Double(totalInstallers))
     }
 }

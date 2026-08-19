@@ -98,8 +98,8 @@ private struct FileMorrowMenu: View {
 
         Text(state.status)
         Text("\(state.files.count.formatted()) files • \(state.readyFiles.count.formatted()) ready")
-        if state.extractedArchiveCount > 0 {
-            Text("\(state.extractedArchiveCount) unpacked archives • \(ByteCountFormatter.string(fromByteCount: state.extractedArchiveReclaimableSize, countStyle: .file)) reclaimable")
+        if state.totalReclaimableSize > 0 {
+            Text("\(ByteCountFormatter.string(fromByteCount: state.totalReclaimableSize, countStyle: .file)) reclaimable from cleanup")
         }
         Text(state.automaticOrganization ? "Automatic organization: On" : "Automatic organization: Off")
 
@@ -127,6 +127,11 @@ private struct FileMorrowMenu: View {
 
         Button("Check Unpacked Archives") {
             state.startExtractedArchiveScan()
+        }
+        .disabled(state.isWorking)
+
+        Button("Check Used Installers") {
+            state.startInstallerScan()
         }
         .disabled(state.isWorking)
 

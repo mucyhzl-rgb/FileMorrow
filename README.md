@@ -65,6 +65,7 @@ batch can be undone.
 - Progress-aware, cancellable exact duplicate detection with SHA-256 and recoverable Trash cleanup
 - Choose which copy of a duplicate group to keep before anything is removed
 - **Extracted Archives**: reclaim space from ZIP files you already unpacked
+- **Installers**: find `.dmg` and `.pkg` files for software already installed
 - Top-level-only organization: downloaded folders and their contents are never moved
 - Read-only recursive duplicate scanning, with explicit confirmation before Trash
 - Color-coded Finder icons distinguish FileMorrow-managed category folders from ordinary folders
@@ -75,10 +76,16 @@ batch can be undone.
 
 ## Requirements
 
-- macOS 26 or later
-- Apple silicon Mac supported by Apple Intelligence for Smart Content
-- Apple Intelligence enabled and its model ready for Smart Content
+- **macOS 14 Sonoma or later** for the app itself
+- macOS 26 on an Apple Intelligence-eligible Mac, with Apple Intelligence
+  enabled, for the optional Smart Content mode
 - Xcode 26 or later to build from source
+
+Everything except Smart Content works on macOS 14 and later: format and
+filename rules, organization and undo, duplicate detection, extracted-archive
+and installer cleanup, teaching, profiles, and file previews. Foundation Models
+is weak-linked and only ever called on macOS 26, so the app launches normally
+where the framework does not exist.
 
 The app checks Foundation Models availability on launch under **Settings →
 Compatibility**. If Apple Intelligence is unavailable, deterministic rules,
@@ -148,14 +155,15 @@ The organizer operates only on loose regular files directly inside
 left in place, and the organizer never moves or modifies their contents. The
 duplicate finder can read files recursively to compare exact SHA-256 hashes, but
 it never removes anything without explicit confirmation. The same rule applies
-to extracted archives: they are found by reading, listed for review, and only
-the archive file itself is ever moved to Trash.
+to extracted archives and installers: they are found by reading, listed for
+review, and only the archive or installer file itself is ever moved to Trash.
 
 ## Menu bar
 
 The menu-bar companion remains available when the main window is closed. It can
 reopen the app, rescan Downloads, prepare a manual organization plan, check for
-duplicates, check for already-unpacked archives, open Settings, or quit. Automatic Organization and Launch at Login
+duplicates, check for already-unpacked archives, check for used installers,
+open Settings, or quit. Automatic Organization and Launch at Login
 default to on for new installs and are clearly presented during onboarding.
 Leaving Automatic Organization enabled grants ongoing consent for hourly
 organization without repeated prompts. Only loose files older than the
@@ -212,6 +220,34 @@ moment of deletion, so an archive whose folder was moved or emptied in the
 meantime is left in place. **Only the `.zip` file moves to recoverable macOS
 Trash. The unpacked folders are never touched.**
 
+## Used installers
+
+**Installers** finds `.dmg` and `.pkg` files in Downloads for software that is
+already on this Mac. Nothing is mounted, opened, or run.
+
+Two independent kinds of evidence are used:
+
+- A **`.pkg`** declares the package identifiers and versions it installs.
+  FileMorrow reads that metadata straight out of the archive and checks it
+  against the install receipts macOS keeps for packages that were actually
+  installed. Every declared identifier must have a receipt at the packaged
+  version or newer. This is an exact match, not a guess.
+- A **`.dmg`** is matched by name to an app in `/Applications` or
+  `~/Applications`, comparing the version in the filename against the installed
+  bundle's version.
+
+**An installer newer than what is installed is never listed.** That is an
+update the user has downloaded but not applied yet, and deleting it would lose
+the update.
+
+The common case runs the other way: an app that updated itself since the
+installer was downloaded is now *ahead* of it, which makes the file on disk
+clearly stale. Those are shown as "Already updated past this version".
+
+As everywhere else, results are reviewed and selected by hand, only the
+installer file moves to recoverable Trash, and installed software is never
+touched.
+
 ## Privacy architecture
 
 ```mermaid
@@ -232,6 +268,8 @@ flowchart LR
     H --> T["User-selected extras to Trash"]
     Z["ZIP files in Downloads"] --> Y["Entry-by-entry size verification<br>against the unpacked folder"]
     Y --> T
+    I["Installers in Downloads"] --> P["Package receipts and<br>installed app versions"]
+    P --> T
 ```
 
 There is no server in this path. FileMorrow has no account, analytics SDK,
@@ -261,6 +299,7 @@ explains:
 - `OrganizerService.swift` — collision-safe move and undo
 - `DuplicateScanner.swift` — fingerprinted SHA-256 duplicate detection
 - `ExtractedArchiveScanner.swift` — verification of already-unpacked archives
+- `InstallerScanner.swift` — receipt and installed-app matching for installers
 - `Views.swift` — native macOS interface
 - `Configuration/default-profile.json` — general-purpose format and category catalog
 
@@ -296,7 +335,8 @@ The organizer itself remains strictly limited to loose top-level files.
 
 The suite covers organization and undo, duplicate detection and its refusal
 paths, archive verification against real ZIP files built during the test run,
-and profile persistence across relaunches.
+installer matching against a real package produced by `pkgbuild`, and profile
+persistence across relaunches.
 
 `SyntheticAccuracyTests` generates privacy-safe fake PDFs, presentations, and
 spreadsheets at test time. It verifies local extraction and subject

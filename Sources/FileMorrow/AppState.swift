@@ -31,6 +31,10 @@ final class AppState {
     var isScanningExtractedArchives = false
     var extractedArchiveScanProgress: ExtractedArchiveScanProgress?
     var hasScannedExtractedArchives = false
+    var redundantInstallers: [RedundantInstaller] = []
+    var isScanningInstallers = false
+    var installerScanProgress: InstallerScanProgress?
+    var hasScannedInstallers = false
     var organizationProposal: OrganizationProposal?
     var lastOrganizedCount = 0
     var onboardingRequestID: UUID?
@@ -44,11 +48,13 @@ final class AppState {
     @ObservationIgnored private let ai = AIClassifier()
     @ObservationIgnored private let duplicateScanner = DuplicateScanner()
     @ObservationIgnored private let archiveScanner = ExtractedArchiveScanner()
+    @ObservationIgnored private let installerScanner = InstallerScanner()
     @ObservationIgnored private let folderBranding = FolderBrandingService()
     @ObservationIgnored private lazy var organizer = OrganizerService(store: store)
     @ObservationIgnored private var automaticTask: Task<Void, Never>?
     @ObservationIgnored private var duplicateScanTask: Task<Void, Never>?
     @ObservationIgnored private var archiveScanTask: Task<Void, Never>?
+    @ObservationIgnored private var installerScanTask: Task<Void, Never>?
     @ObservationIgnored private var analysisTask: Task<Void, Never>?
     @ObservationIgnored let downloadsURL = FileManager.default.homeDirectoryForCurrentUser.appending(path: "Downloads")
 
@@ -102,6 +108,13 @@ final class AppState {
     var extractedArchiveReclaimableSize: Int64 {
         extractedArchives.reduce(0) { $0 + $1.archiveSize }
     }
+    var redundantInstallerCount: Int { redundantInstallers.count }
+    var redundantInstallerReclaimableSize: Int64 {
+        redundantInstallers.reduce(0) { $0 + $1.installerSize }
+    }
+    var totalReclaimableSize: Int64 {
+        duplicateWastedSize + extractedArchiveReclaimableSize + redundantInstallerReclaimableSize
+    }
     var intelligenceReady: Bool { intelligenceAvailability.isReady }
     var intelligenceStatusTitle: String { intelligenceAvailability.title }
     var intelligenceStatusDetail: String { intelligenceAvailability.detail }
@@ -117,6 +130,7 @@ final class AppState {
         automaticTask?.cancel()
         duplicateScanTask?.cancel()
         archiveScanTask?.cancel()
+        installerScanTask?.cancel()
     }
 
     func definition(for category: ArchiveCategory) -> CategoryDefinition {
@@ -519,6 +533,75 @@ final class AppState {
         await scan()
     }
 
+    func startInstallerScan() {
+        guard !isWorking else { return }
+        installerScanTask?.cancel()
+        installerScanTask = Task { [weak self] in await self?.scanInstallers() }
+    }
+
+    func scanInstallers() async {
+        guard !isWorking else { return }
+        isWorking = true
+        isScanningInstallers = true
+        installerScanProgress = nil
+        status = "Checking which installers you have already used…"
+        let result = await installerScanner.scan(root: downloadsURL, profile: profile) { [weak self] update in
+            await MainActor.run {
+                self?.installerScanProgress = update
+                self?.progress = update.fraction
+                self?.status = update.currentInstaller.map { "Checking \($0)…" }
+                    ?? "Checking installers…"
+            }
+        }
+        if !Task.isCancelled {
+            redundantInstallers = result
+            hasScannedInstallers = true
+        }
+        isScanningInstallers = false
+        isWorking = false
+        progress = nil
+        installerScanProgress = nil
+        status = Task.isCancelled
+            ? "Installer check stopped"
+            : redundantInstallers.isEmpty
+                ? "No installers match software already on this Mac"
+                : "\(redundantInstallerCount) used installers • \(ByteCountFormatter.string(fromByteCount: redundantInstallerReclaimableSize, countStyle: .file)) reclaimable"
+    }
+
+    func cancelInstallerScan() {
+        installerScanTask?.cancel()
+        status = "Stopping installer check…"
+    }
+
+    func trashInstallers(_ installers: [RedundantInstaller]) async {
+        guard !isWorking, !installers.isEmpty else { return }
+        isWorking = true
+        status = "Moving used installers to Trash…"
+        defer { isWorking = false }
+
+        var reclaimed: Int64 = 0
+        var resolved: Set<String> = []
+        var firstFailure: String?
+        for installer in installers {
+            do {
+                if try await installerScanner.trash(installer) {
+                    reclaimed += installer.installerSize
+                }
+                resolved.insert(installer.id)
+            } catch {
+                if firstFailure == nil { firstFailure = error.localizedDescription }
+            }
+        }
+
+        let trashed = resolved.count
+        redundantInstallers.removeAll { resolved.contains($0.id) }
+        lastError = firstFailure
+        status = trashed == 0
+            ? "No installers were moved to Trash"
+            : "Moved \(trashed) used \(trashed == 1 ? "installer" : "installers") to Trash • \(ByteCountFormatter.string(fromByteCount: reclaimed, countStyle: .file)) reclaimed"
+        await scan()
+    }
+
     /// Lets the user pick which copy of a duplicate group survives cleanup.
     func setDuplicateKeeper(_ url: URL, in group: DuplicateGroup) {
         guard let index = duplicateGroups.firstIndex(where: { $0.id == group.id }) else { return }
@@ -708,7 +791,7 @@ final class AppState {
             case .lastWeek: $0.dateAdded >= cutoffDate
             case .ready: ArchiveEligibility.isEligible($0, cutoffDate: cutoffDate)
             case .all: true
-            case .duplicates, .extracted: false
+            case .duplicates, .extracted, .installers: false
             }
         }.count
     }
@@ -720,7 +803,7 @@ final class AppState {
         case .lastWeek: record.dateAdded >= cutoffDate
         case .ready: ArchiveEligibility.isEligible(record, cutoffDate: cutoffDate)
         case .all: true
-        case .duplicates, .extracted: false
+        case .duplicates, .extracted, .installers: false
         }
     }
 
