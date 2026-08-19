@@ -94,11 +94,27 @@ actor FileScanner {
                 location: location
             )
         }
-        saveAges(stableAges)
+        saveAges(pruned(stableAges, keeping: Self.livePaths(for: records, downloadsURL: downloadsURL)))
         if recoverFromModification {
             try? FileManager.default.removeItem(at: recoveryFlagURL)
         }
         return records
+    }
+
+    /// Every path a record can be looked up under: where it is now, and where
+    /// it sat at the top level of Downloads. Undo restores files to the latter,
+    /// so dropping those keys would reset the eligibility window.
+    static func livePaths(for records: [FileRecord], downloadsURL: URL) -> Set<String> {
+        var paths = Set<String>()
+        for record in records {
+            paths.insert(record.url.path)
+            paths.insert(downloadsURL.appending(path: record.url.lastPathComponent).path)
+        }
+        return paths
+    }
+
+    private func pruned(_ ages: [String: Date], keeping livePaths: Set<String>) -> [String: Date] {
+        ages.filter { livePaths.contains($0.key) }
     }
 
     private func loadAges() -> [String: Date] {

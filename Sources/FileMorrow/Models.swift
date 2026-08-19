@@ -51,6 +51,9 @@ struct CategoryDefinition: Codable, Hashable, Identifiable, Sendable {
     var examples: [String]
     var contentAware: Bool
     var extensionConfidence: Int
+    /// Built-in extensions, keywords, or examples the user deliberately removed.
+    /// Recorded so a profile merge never resurrects them. Compared lowercased.
+    var suppressedBuiltIns: [String]? = nil
 
     var category: ArchiveCategory { .init(rawValue: id) }
 
@@ -77,6 +80,8 @@ struct OrganizationProfile: Codable, Sendable {
     var schemaVersion: Int
     var name: String
     var categories: [CategoryDefinition]
+    /// Built-in categories the user deleted, so a merge never re-adds them.
+    var removedBuiltInCategoryIDs: [String]? = nil
 
     var enabledCategories: [CategoryDefinition] {
         categories.filter(\.enabled)
@@ -117,6 +122,7 @@ enum AgeView: String, CaseIterable, Identifiable {
     case ready = "Ready to Archive"
     case all = "All Downloads"
     case duplicates = "Duplicates"
+    case extracted = "Extracted Archives"
 
     var id: String { rawValue }
 
@@ -128,6 +134,7 @@ enum AgeView: String, CaseIterable, Identifiable {
         case .ready: "sparkles.rectangle.stack"
         case .all: "tray.full.fill"
         case .duplicates: "doc.on.doc.fill"
+        case .extracted: "archivebox.fill"
         }
     }
 }
@@ -136,10 +143,23 @@ struct DuplicateGroup: Identifiable, Hashable, Sendable {
     let id: String
     let files: [URL]
     let fileSize: Int64
+    /// Which copy survives cleanup. The scanner picks the oldest, shallowest
+    /// copy; the user can point this at any other copy before trashing.
+    var keeperIndex: Int = 0
 
-    var keeper: URL { files[0] }
-    var extras: [URL] { Array(files.dropFirst()) }
+    var keeper: URL { files[min(max(0, keeperIndex), files.count - 1)] }
+    var extras: [URL] {
+        let keeper = keeper
+        return files.filter { $0 != keeper }
+    }
     var wastedSize: Int64 { fileSize * Int64(extras.count) }
+
+    func keeping(_ url: URL) -> DuplicateGroup {
+        guard let index = files.firstIndex(of: url) else { return self }
+        var copy = self
+        copy.keeperIndex = index
+        return copy
+    }
 }
 
 struct DuplicateScanProgress: Sendable {
@@ -230,5 +250,30 @@ struct RuleDecision: Sendable {
 enum ArchiveEligibility {
     static func isEligible(_ record: FileRecord, cutoffDate: Date) -> Bool {
         !record.isOrganized && record.dateAdded < cutoffDate
+    }
+}
+
+/// A ZIP whose full contents were verified to already exist on disk, so the
+/// archive itself is redundant and can go to recoverable Trash.
+struct ExtractedArchive: Identifiable, Hashable, Sendable {
+    let archiveURL: URL
+    let destinationURL: URL
+    let archiveSize: Int64
+    let entryCount: Int
+    let extractedSize: Int64
+
+    var id: String { archiveURL.path }
+    var name: String { archiveURL.lastPathComponent }
+    var destinationName: String { destinationURL.lastPathComponent }
+}
+
+struct ExtractedArchiveScanProgress: Sendable {
+    let completedArchives: Int
+    let totalArchives: Int
+    let currentArchive: String?
+
+    var fraction: Double? {
+        guard totalArchives > 0 else { return nil }
+        return min(1, Double(completedArchives) / Double(totalArchives))
     }
 }

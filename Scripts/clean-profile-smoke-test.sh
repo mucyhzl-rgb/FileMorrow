@@ -16,6 +16,16 @@ cleanup() {
 trap cleanup EXIT
 
 mkdir -p "$profile_dir/Downloads" "$profile_dir/Library/Preferences"
+
+# Give the packaged app real content to classify on first launch, including a
+# ZIP that is already unpacked next to itself.
+downloads="$profile_dir/Downloads"
+mkdir -p "$downloads/sample-report/section"
+printf 'quarterly figures\n' >"$downloads/sample-report/summary.txt"
+printf 'appendix\n' >"$downloads/sample-report/section/appendix.txt"
+printf 'a loose note\n' >"$downloads/notes.txt"
+(cd "$downloads" && /usr/bin/zip -r -q -X sample-report.zip sample-report)
+
 "$project_dir/Scripts/package-app.sh"
 
 HOME="$profile_dir" \
@@ -31,4 +41,4 @@ if ! kill -0 "$app_pid" 2>/dev/null; then
   exit 1
 fi
 
-echo "Clean-profile smoke test passed: the packaged app remained running with empty settings and Downloads."
+echo "Clean-profile smoke test passed: the packaged app remained running with fresh settings and a populated Downloads folder."

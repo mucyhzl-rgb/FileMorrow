@@ -53,16 +53,19 @@ struct FileMorrowApp: App {
                     Task { await state.scan() }
                 }
                 .keyboardShortcut("r")
+                .disabled(state.isWorking)
 
                 Button("Analyze Ready Files") {
-                    Task { await state.analyzeReady() }
+                    state.startAnalysis()
                 }
                 .keyboardShortcut("a", modifiers: [.command, .shift])
+                .disabled(state.isWorking || state.classificationMode == .formatOnly)
 
                 Button("Undo Last Organization") {
                     Task { await state.undoLastMove() }
                 }
                 .keyboardShortcut("z", modifiers: .command)
+                .disabled(state.isWorking)
 
                 Button("Show Welcome Guide") {
                     state.requestOnboarding()
@@ -95,6 +98,9 @@ private struct FileMorrowMenu: View {
 
         Text(state.status)
         Text("\(state.files.count.formatted()) files • \(state.readyFiles.count.formatted()) ready")
+        if state.extractedArchiveCount > 0 {
+            Text("\(state.extractedArchiveCount) unpacked archives • \(ByteCountFormatter.string(fromByteCount: state.extractedArchiveReclaimableSize, countStyle: .file)) reclaimable")
+        }
         Text(state.automaticOrganization ? "Automatic organization: On" : "Automatic organization: Off")
 
         Divider()
@@ -116,6 +122,11 @@ private struct FileMorrowMenu: View {
 
         Button("Scan for Duplicates") {
             state.startDuplicateScan()
+        }
+        .disabled(state.isWorking)
+
+        Button("Check Unpacked Archives") {
+            state.startExtractedArchiveScan()
         }
         .disabled(state.isWorking)
 

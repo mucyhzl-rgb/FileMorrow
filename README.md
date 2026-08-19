@@ -3,8 +3,8 @@
 <p align="center">
   <img src="Assets/FileMorrowIconTransparent.png" width="128" alt="FileMorrow app icon">
   <br><br>
-  <a href="https://github.com/M-Nabeegh/FileMorrow/releases/download/v1.7.1/FileMorrow-1.7.1-macOS.dmg">
-    <img src="https://img.shields.io/badge/Download_DMG-v1.7.1-6C63FF?style=for-the-badge&logo=apple&logoColor=white" alt="Download FileMorrow 1.7.1 DMG">
+  <a href="https://github.com/M-Nabeegh/FileMorrow/releases/latest">
+    <img src="https://img.shields.io/github/v/release/M-Nabeegh/FileMorrow?style=for-the-badge&logo=apple&logoColor=white&label=Download&color=6C63FF" alt="Download the latest FileMorrow release">
   </a>
 </p>
 
@@ -63,6 +63,8 @@ batch can be undone.
 - Plan-first approval before any eligible file moves
 - Explicit **Undo Last Organization**, Command-Z, and collision-safe moves
 - Progress-aware, cancellable exact duplicate detection with SHA-256 and recoverable Trash cleanup
+- Choose which copy of a duplicate group to keep before anything is removed
+- **Extracted Archives**: reclaim space from ZIP files you already unpacked
 - Top-level-only organization: downloaded folders and their contents are never moved
 - Read-only recursive duplicate scanning, with explicit confirmation before Trash
 - Color-coded Finder icons distinguish FileMorrow-managed category folders from ordinary folders
@@ -145,13 +147,15 @@ The organizer operates only on loose regular files directly inside
 `~/Downloads`. Existing, newly created, and newly downloaded folders are always
 left in place, and the organizer never moves or modifies their contents. The
 duplicate finder can read files recursively to compare exact SHA-256 hashes, but
-it never removes anything without explicit confirmation.
+it never removes anything without explicit confirmation. The same rule applies
+to extracted archives: they are found by reading, listed for review, and only
+the archive file itself is ever moved to Trash.
 
 ## Menu bar
 
 The menu-bar companion remains available when the main window is closed. It can
 reopen the app, rescan Downloads, prepare a manual organization plan, check for
-duplicates, open Settings, or quit. Automatic Organization and Launch at Login
+duplicates, check for already-unpacked archives, open Settings, or quit. Automatic Organization and Launch at Login
 default to on for new installs and are clearly presented during onboarding.
 Leaving Automatic Organization enabled grants ongoing consent for hourly
 organization without repeated prompts. Only loose files older than the
@@ -181,6 +185,33 @@ labeled and excluded from the seven-day queue so they cannot be moved twice.
   <img src="docs/images/finder-folders.png" width="300" alt="Color-coded FileMorrow category folders in Finder">
 </p>
 
+## Extracted archives
+
+Downloads fill up with ZIP files that were unpacked months ago and never
+deleted. **Extracted Archives** finds them and offers to move just the archive
+to Trash.
+
+An archive is only listed when the evidence is complete:
+
+1. Every file entry in the ZIP exists in the unpacked folder at the same
+   relative path.
+2. Every one of those files matches the entry's uncompressed size exactly.
+3. Bookkeeping macOS discards during extraction (`__MACOSX`, `.DS_Store`,
+   AppleDouble `._` files) is ignored, and an entry that would resolve outside
+   the destination voids the whole archive.
+
+A partial extraction, a renamed folder, or a single edited file is enough to
+leave an archive alone. Both common shapes are recognised: `report.zip`
+unpacked to `report/`, and a flat archive unpacked into a folder named after
+it.
+
+Nothing is automatic. Results are listed with the unpacked destination, the
+verified file count, and the reclaimable size; the user selects what to remove.
+Each archive is verified against its unpacked folder one final time at the
+moment of deletion, so an archive whose folder was moved or emptied in the
+meantime is left in place. **Only the `.zip` file moves to recoverable macOS
+Trash. The unpacked folders are never touched.**
+
 ## Privacy architecture
 
 ```mermaid
@@ -199,6 +230,8 @@ flowchart LR
     O --> U["Undo history"]
     X["All accessible files under Downloads<br>read-only"] --> H["SHA-256 duplicate scan"]
     H --> T["User-selected extras to Trash"]
+    Z["ZIP files in Downloads"] --> Y["Entry-by-entry size verification<br>against the unpacked folder"]
+    Y --> T
 ```
 
 There is no server in this path. FileMorrow has no account, analytics SDK,
@@ -226,6 +259,8 @@ explains:
 - `RuleClassifier.swift` — deterministic and semantic fast path
 - `PersistenceStore.swift` — decisions and move history
 - `OrganizerService.swift` — collision-safe move and undo
+- `DuplicateScanner.swift` — fingerprinted SHA-256 duplicate detection
+- `ExtractedArchiveScanner.swift` — verification of already-unpacked archives
 - `Views.swift` — native macOS interface
 - `Configuration/default-profile.json` — general-purpose format and category catalog
 
@@ -259,6 +294,10 @@ The organizer itself remains strictly limited to loose top-level files.
 
 ## Accuracy and compatibility testing
 
+The suite covers organization and undo, duplicate detection and its refusal
+paths, archive verification against real ZIP files built during the test run,
+and profile persistence across relaunches.
+
 `SyntheticAccuracyTests` generates privacy-safe fake PDFs, presentations, and
 spreadsheets at test time. It verifies local extraction and subject
 classification without committing personal documents. Ambiguous filenames and
@@ -276,15 +315,6 @@ settings:
 See [`docs/CLEAN_MACHINE_TEST.md`](docs/CLEAN_MACHINE_TEST.md) for the required
 second-Mac matrix. A local simulated profile does not replace physical testing
 with Apple Intelligence both enabled and disabled.
-
-## Release download count
-
-The badge at the top shows total GitHub release-asset downloads without adding
-telemetry to the app. Maintainers can also print the current count:
-
-```bash
-./Scripts/release-downloads.sh
-```
 
 ## License
 

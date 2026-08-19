@@ -2,6 +2,32 @@
 
 All notable FileMorrow changes are documented here.
 
+## 1.8.0 — 2026-08-20
+
+- Add Extracted Archives: find ZIP files whose contents are already unpacked
+  next to them and move just the archive to recoverable Trash. Every entry must
+  match the unpacked file's size before an archive is listed, the archive is
+  re-verified once more at the moment of deletion, and the unpacked folders are
+  never touched.
+- Let the user choose which copy of a duplicate group survives cleanup. The
+  scanner now proposes the least buried and oldest copy instead of whichever
+  path happened to sort first.
+- Re-read duplicate bytes from disk before deleting anything, so a file that
+  changed between the scan and the confirmation is refused rather than trashed.
+- Refuse duplicate cleanup outright when the copy marked to keep has gone.
+- Keep deleted categories deleted and removed formats, keywords, and examples
+  removed when a profile merges with built-in knowledge on the next launch.
+- Never let a single locked or unreadable file stop the rest of an organization
+  run; the batch finishes and stays undoable.
+- Stop analysis from tracking files by list position, which could target the
+  wrong file or crash if the list changed mid-run.
+- Write analysis decisions once per run instead of rewriting the whole file per
+  file, and prune decisions and first-seen dates for files that no longer exist.
+- Cap the move history so undo stays fast on long-running installs.
+- Guard the Scan, Analyze, and classification-mode controls while work is in
+  flight so they cannot interrupt a running job.
+- Stop content extraction from stalling on encrypted or corrupt archives.
+
 ## 1.7.1 — 2026-07-27
 
 - Default Automatic Organization and Launch at Login to on for new installs.

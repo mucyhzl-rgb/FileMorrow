@@ -40,10 +40,10 @@ struct RootView: View {
                 } else {
                     Menu {
                         Button("Analyze Next 25") {
-                            Task { await state.analyzeReady(limit: 25) }
+                            state.startAnalysis(limit: 25)
                         }
                         Button("Analyze All Remaining") {
-                            Task { await state.analyzeReady() }
+                            state.startAnalysis()
                         }
                     } label: {
                         Label("Analyze", systemImage: "sparkles")
@@ -119,7 +119,7 @@ struct SidebarView: View {
             get: { state.ageSelection },
             set: { selection in
                 state.ageSelection = selection
-                if selection != .duplicates { state.categoryFilter = nil }
+                if selection != .duplicates, selection != .extracted { state.categoryFilter = nil }
             }
         )) {
             Section("Fresh") {
@@ -130,10 +130,26 @@ struct SidebarView: View {
             }
 
             Section("Library") {
-                ForEach([AgeView.ready, .all, .duplicates]) { item in
+                ForEach([AgeView.ready, .all]) { item in
                     SidebarRow(title: item.rawValue, icon: item.icon, count: state.count(for: item))
                         .tag(item)
                 }
+            }
+
+            Section("Reclaim Space") {
+                SidebarRow(
+                    title: AgeView.duplicates.rawValue,
+                    icon: AgeView.duplicates.icon,
+                    count: state.duplicateExtraCount
+                )
+                .tag(AgeView.duplicates)
+
+                SidebarRow(
+                    title: AgeView.extracted.rawValue,
+                    icon: AgeView.extracted.icon,
+                    count: state.extractedArchiveCount
+                )
+                .tag(AgeView.extracted)
             }
 
             Section("Categories") {
@@ -202,6 +218,8 @@ struct FileListView: View {
         Group {
             if state.ageSelection == .duplicates {
                 DuplicateCenterView(state: state)
+            } else if state.ageSelection == .extracted {
+                ExtractedArchiveCenterView(state: state)
             } else {
                 VStack(spacing: 0) {
                     DashboardHeader(state: state)
@@ -335,13 +353,24 @@ private struct DuplicateCenterView: View {
                                 pendingGroup = group
                             }
                         }
-                        Label("Keep: \(group.keeper.path)", systemImage: "checkmark.circle.fill")
-                            .foregroundStyle(.green)
-                            .textSelection(.enabled)
-                        ForEach(group.extras, id: \.path) { url in
-                            Label(url.path, systemImage: "trash")
-                                .foregroundStyle(.secondary)
+                        ForEach(group.files, id: \.path) { url in
+                            let isKeeper = url == group.keeper
+                            HStack(spacing: 8) {
+                                Label(
+                                    url.path,
+                                    systemImage: isKeeper ? "checkmark.circle.fill" : "trash"
+                                )
+                                .foregroundStyle(isKeeper ? .green : .secondary)
                                 .textSelection(.enabled)
+                                Spacer()
+                                if !isKeeper {
+                                    Button("Keep This One") {
+                                        state.setDuplicateKeeper(url, in: group)
+                                    }
+                                    .buttonStyle(.link)
+                                    .font(.caption)
+                                }
+                            }
                         }
                     }
                     .padding(.vertical, 8)
@@ -366,6 +395,169 @@ private struct DuplicateCenterView: View {
             Button("Cancel", role: .cancel) { pendingGroup = nil }
         } message: { group in
             Text("FileMorrow will keep \(group.keeper.path). Verify every path: nested project and app files may intentionally be identical. Confirmed SHA-256-identical extras move to recoverable macOS Trash.")
+        }
+    }
+}
+
+private struct ExtractedArchiveCenterView: View {
+    @Bindable var state: AppState
+    @State private var selection: Set<String> = []
+    @State private var showConfirmation = false
+
+    private var selected: [ExtractedArchive] {
+        state.extractedArchives.filter { selection.contains($0.id) }
+    }
+
+    private var selectedSize: Int64 {
+        selected.reduce(0) { $0 + $1.archiveSize }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            header
+            Divider()
+            content
+        }
+        .confirmationDialog(
+            "Move \(selected.count) unpacked \(selected.count == 1 ? "archive" : "archives") to Trash?",
+            isPresented: $showConfirmation
+        ) {
+            Button("Move to Trash", role: .destructive) {
+                let archives = selected
+                Task {
+                    await state.trashExtractedArchives(archives)
+                    selection.removeAll()
+                }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("Only the .zip files move to recoverable macOS Trash. The unpacked folders stay exactly where they are, and every archive is re-verified against them one final time before it is moved.")
+        }
+        .onChange(of: state.extractedArchives) { _, archives in
+            let ids = Set(archives.map(\.id))
+            selection.formIntersection(ids)
+        }
+    }
+
+    private var header: some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Extracted Archives").font(.title2.bold())
+                Text("Finds ZIP files whose contents are already unpacked next to them. Every entry must match the unpacked file byte-for-byte in size before an archive is listed here.")
+                    .foregroundStyle(.secondary)
+                if !state.extractedArchives.isEmpty {
+                    Label(
+                        "\(state.extractedArchiveCount) unpacked • \(ByteCountFormatter.string(fromByteCount: state.extractedArchiveReclaimableSize, countStyle: .file)) reclaimable",
+                        systemImage: "internaldrive"
+                    )
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.indigo)
+                }
+            }
+            Spacer()
+            if state.isScanningExtractedArchives {
+                Button("Stop Check", role: .cancel) {
+                    state.cancelExtractedArchiveScan()
+                }
+                .buttonStyle(.bordered)
+            } else {
+                Button("Check Archives") {
+                    state.startExtractedArchiveScan()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(state.isWorking)
+            }
+        }
+        .padding(20)
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if state.isScanningExtractedArchives, let scan = state.extractedArchiveScanProgress {
+            VStack(spacing: 14) {
+                ProgressView(value: scan.fraction)
+                    .frame(maxWidth: 420)
+                Text("Verifying archive contents")
+                    .font(.headline)
+                Text("\(scan.completedArchives.formatted()) of \(scan.totalArchives.formatted()) archives")
+                    .foregroundStyle(.secondary)
+                if let current = scan.currentArchive {
+                    Text(current)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .padding()
+        } else if state.extractedArchives.isEmpty {
+            ContentUnavailableView(
+                state.hasScannedExtractedArchives ? "No unpacked archives" : "No archive check yet",
+                systemImage: "archivebox",
+                description: Text(
+                    state.hasScannedExtractedArchives
+                        ? "Every ZIP in Downloads is either still packed or does not fully match a folder next to it."
+                        : "Run a check to find ZIP files you already extracted and no longer need."
+                )
+            )
+        } else {
+            VStack(spacing: 0) {
+                List(state.extractedArchives, selection: $selection) { archive in
+                    HStack(spacing: 12) {
+                        Image(systemName: "archivebox.fill")
+                            .foregroundStyle(.indigo)
+                            .font(.title3)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(archive.name)
+                                .fontWeight(.medium)
+                            Label(
+                                "Unpacked to \(archive.destinationName)",
+                                systemImage: "arrow.turn.down.right"
+                            )
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            Text("\(archive.entryCount.formatted()) files verified • \(ByteCountFormatter.string(fromByteCount: archive.extractedSize, countStyle: .file)) on disk")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                        Spacer()
+                        Text(ByteCountFormatter.string(fromByteCount: archive.archiveSize, countStyle: .file))
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                    .padding(.vertical, 6)
+                    .tag(archive.id)
+                }
+                .listStyle(.inset)
+
+                Divider()
+
+                HStack {
+                    Button(selection.count == state.extractedArchives.count ? "Deselect All" : "Select All") {
+                        selection = selection.count == state.extractedArchives.count
+                            ? []
+                            : Set(state.extractedArchives.map(\.id))
+                    }
+                    .buttonStyle(.link)
+
+                    Spacer()
+
+                    if !selection.isEmpty {
+                        Text("\(selection.count) selected • \(ByteCountFormatter.string(fromByteCount: selectedSize, countStyle: .file))")
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+
+                    Button("Move \(selection.count) to Trash", role: .destructive) {
+                        showConfirmation = true
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
+                    .disabled(selection.isEmpty || state.isWorking)
+                }
+                .padding(16)
+                .background(.ultraThinMaterial)
+            }
         }
     }
 }
@@ -756,6 +948,7 @@ struct SettingsView: View {
                         }
                     }
                     .pickerStyle(.segmented)
+                    .disabled(state.isWorking)
 
                     Text(state.classificationMode.detail)
                         .foregroundStyle(.secondary)

@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 
 actor ContentExtractor {
     private let characterLimit = 4_000
+    private let processTimeout: TimeInterval = 20
 
     func extract(from url: URL, contentType: UTType?) async -> String {
         let ext = url.pathExtension.lowercased()
@@ -63,9 +64,19 @@ actor ContentExtractor {
         process.arguments = arguments
         process.standardOutput = pipe
         process.standardError = FileHandle.nullDevice
+        // An encrypted or corrupt archive makes unzip wait for a password on
+        // stdin while writing nothing to stdout, which would park this actor
+        // on the read below for as long as the app runs.
+        process.standardInput = FileHandle.nullDevice
         do {
             try process.run()
-            let data = try pipe.fileHandleForReading.read(upToCount: 64_000) ?? Data()
+            let deadline = Date().addingTimeInterval(processTimeout)
+            var data = Data()
+            while data.count < 64_000, Date() < deadline {
+                guard let chunk = try pipe.fileHandleForReading.read(upToCount: 64_000 - data.count),
+                      !chunk.isEmpty else { break }
+                data.append(chunk)
+            }
             if process.isRunning {
                 process.terminate()
             }
