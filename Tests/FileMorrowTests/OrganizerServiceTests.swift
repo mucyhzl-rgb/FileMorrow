@@ -35,14 +35,98 @@ final class OrganizerServiceTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: images.appending(path: "photo 2.jpg").path))
     }
 
-    private func record(url: URL) -> FileRecord {
+    func testOneUnmovableFileDoesNotStrandTheRest() async throws {
+        let root = temporaryDirectory()
+        let state = root.appending(path: "State", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        // A plain file where the Images folder needs to go, so creating that
+        // destination fails for the first record only.
+        try Data("blocker".utf8).write(to: root.appending(path: "Images"))
+
+        let blocked = root.appending(path: "photo.jpg")
+        let movable = root.appending(path: "notes.pdf")
+        try Data("jpg".utf8).write(to: blocked)
+        try Data("pdf".utf8).write(to: movable)
+
+        let organizer = OrganizerService(store: PersistenceStore(baseURL: state))
+        let moved = try await organizer.organize(
+            [record(url: blocked), record(url: movable, category: .documents)],
+            downloadsURL: root,
+            minimumConfidence: 85,
+            profile: TestProfiles.general
+        )
+
+        let skipped = await organizer.skippedCount
+        XCTAssertEqual(moved, 1, "The healthy file must still be organized")
+        XCTAssertEqual(skipped, 1)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: blocked.path), "The failed file stays put")
+        XCTAssertTrue(FileManager.default.fileExists(
+            atPath: root.appending(path: "Documents & Books/notes.pdf").path
+        ))
+
+        let undone = try await organizer.undoLast()
+        XCTAssertEqual(undone, 1, "A partial run must still be undoable")
+    }
+
+    func testFailureWithNothingMovedIsReported() async throws {
+        let root = temporaryDirectory()
+        let state = root.appending(path: "State", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        try Data("blocker".utf8).write(to: root.appending(path: "Images"))
+        let blocked = root.appending(path: "photo.jpg")
+        try Data("jpg".utf8).write(to: blocked)
+
+        let organizer = OrganizerService(store: PersistenceStore(baseURL: state))
+        do {
+            _ = try await organizer.organize(
+                [record(url: blocked)],
+                downloadsURL: root,
+                minimumConfidence: 85,
+                profile: TestProfiles.general
+            )
+            XCTFail("A run that moved nothing must surface the error")
+        } catch {
+            XCTAssertTrue(FileManager.default.fileExists(atPath: blocked.path))
+        }
+    }
+
+    func testFilesBelowTheConfidenceGateAreLeftAlone() async throws {
+        let root = temporaryDirectory()
+        let state = root.appending(path: "State", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let uncertain = root.appending(path: "mystery.jpg")
+        try Data("jpg".utf8).write(to: uncertain)
+
+        let organizer = OrganizerService(store: PersistenceStore(baseURL: state))
+        let moved = try await organizer.organize(
+            [record(url: uncertain, confidence: 40)],
+            downloadsURL: root,
+            minimumConfidence: 85,
+            profile: TestProfiles.general
+        )
+
+        XCTAssertEqual(moved, 0)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: uncertain.path))
+    }
+
+    private func record(
+        url: URL,
+        category: ArchiveCategory = .images,
+        confidence: Int = 100
+    ) -> FileRecord {
         FileRecord(
             url: url,
             dateAdded: .distantPast,
             size: 3,
             contentType: "public.jpeg",
-            category: .images,
-            confidence: 100,
+            category: category,
+            confidence: confidence,
             reason: "Known image format",
             source: .rule,
             excerpt: nil,

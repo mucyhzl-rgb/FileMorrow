@@ -89,7 +89,12 @@ actor DuplicateScanner {
                     let ordered = exactMatches.sorted {
                         $0.path.localizedStandardCompare($1.path) == .orderedAscending
                     }
-                    groups.append(.init(id: hash, files: ordered, fileSize: size))
+                    groups.append(.init(
+                        id: hash,
+                        files: ordered,
+                        fileSize: size,
+                        keeperIndex: keeperIndex(among: ordered, root: root)
+                    ))
                 }
             }
         }
@@ -100,8 +105,18 @@ actor DuplicateScanner {
         in group: DuplicateGroup,
         trash: ((URL) throws -> Void)? = nil
     ) throws -> Int {
+        // The keeper has to still be there, otherwise cleanup would remove the
+        // last remaining copy of the file.
+        guard FileManager.default.fileExists(atPath: group.keeper.path) else {
+            throw DuplicateCleanupError.keeperMissing(group.keeper.lastPathComponent)
+        }
         var count = 0
         for url in group.extras where FileManager.default.fileExists(atPath: url.path) {
+            // Re-hash before deleting: the file may have been replaced between
+            // the scan and this confirmation.
+            guard currentHash(url, expectedSize: group.fileSize) == group.id else {
+                throw DuplicateCleanupError.contentsChanged(url.lastPathComponent)
+            }
             if let trash {
                 try trash(url)
             } else {
@@ -111,6 +126,50 @@ actor DuplicateScanner {
             count += 1
         }
         return count
+    }
+
+    /// Hashes the bytes on disk right now.
+    ///
+    /// `URL.resourceValues` caches per instance and `fullHash` memoises by
+    /// path, so both would happily report the state captured during the scan.
+    /// Cleanup is destructive, so it reads through to the filesystem instead.
+    private func currentHash(_ url: URL, expectedSize: Int64) -> String? {
+        let attributes = try? FileManager.default.attributesOfItem(atPath: url.path)
+        guard let size = (attributes?[.size] as? NSNumber)?.int64Value,
+              size == expectedSize,
+              let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? handle.close() }
+
+        var hasher = SHA256()
+        while let data = try? handle.read(upToCount: 1_048_576), !data.isEmpty {
+            hasher.update(data: data)
+        }
+        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+    }
+
+    /// Picks the copy a person would call the original: the least buried one,
+    /// then the oldest, then the one without a "copy"/"2" suffix on its name.
+    private func keeperIndex(among urls: [URL], root: URL) -> Int {
+        let rootDepth = root.pathComponents.count
+        let ranked = urls.enumerated().min { lhs, rhs in
+            let left = rank(lhs.element, rootDepth: rootDepth)
+            let right = rank(rhs.element, rootDepth: rootDepth)
+            if left.depth != right.depth { return left.depth < right.depth }
+            if left.created != right.created { return left.created < right.created }
+            if left.nameLength != right.nameLength { return left.nameLength < right.nameLength }
+            return lhs.element.path.localizedStandardCompare(rhs.element.path) == .orderedAscending
+        }
+        return ranked?.offset ?? 0
+    }
+
+    private func rank(_ url: URL, rootDepth: Int) -> (depth: Int, created: Date, nameLength: Int) {
+        let values = try? url.resourceValues(forKeys: [.creationDateKey, .contentModificationDateKey])
+        let created = values?.creationDate ?? values?.contentModificationDate ?? .distantFuture
+        return (
+            depth: max(0, url.pathComponents.count - rootDepth),
+            created: created,
+            nameLength: url.lastPathComponent.count
+        )
     }
 
     private func fileSize(_ url: URL) -> Int64 {
@@ -166,4 +225,18 @@ actor DuplicateScanner {
         }
     }
 
+}
+
+enum DuplicateCleanupError: LocalizedError {
+    case keeperMissing(String)
+    case contentsChanged(String)
+
+    var errorDescription: String? {
+        switch self {
+        case let .keeperMissing(name):
+            "Nothing was deleted: the copy FileMorrow planned to keep (\(name)) is no longer there."
+        case let .contentsChanged(name):
+            "Nothing further was deleted: \(name) changed since the scan and is no longer an exact duplicate."
+        }
+    }
 }

@@ -27,6 +27,14 @@ final class AppState {
     var duplicateGroups: [DuplicateGroup] = []
     var isScanningDuplicates = false
     var duplicateScanProgress: DuplicateScanProgress?
+    var extractedArchives: [ExtractedArchive] = []
+    var isScanningExtractedArchives = false
+    var extractedArchiveScanProgress: ExtractedArchiveScanProgress?
+    var hasScannedExtractedArchives = false
+    var redundantInstallers: [RedundantInstaller] = []
+    var isScanningInstallers = false
+    var installerScanProgress: InstallerScanProgress?
+    var hasScannedInstallers = false
     var organizationProposal: OrganizationProposal?
     var lastOrganizedCount = 0
     var onboardingRequestID: UUID?
@@ -39,10 +47,15 @@ final class AppState {
     @ObservationIgnored private let extractor = ContentExtractor()
     @ObservationIgnored private let ai = AIClassifier()
     @ObservationIgnored private let duplicateScanner = DuplicateScanner()
+    @ObservationIgnored private let archiveScanner = ExtractedArchiveScanner()
+    @ObservationIgnored private let installerScanner = InstallerScanner()
     @ObservationIgnored private let folderBranding = FolderBrandingService()
     @ObservationIgnored private lazy var organizer = OrganizerService(store: store)
     @ObservationIgnored private var automaticTask: Task<Void, Never>?
     @ObservationIgnored private var duplicateScanTask: Task<Void, Never>?
+    @ObservationIgnored private var archiveScanTask: Task<Void, Never>?
+    @ObservationIgnored private var installerScanTask: Task<Void, Never>?
+    @ObservationIgnored private var analysisTask: Task<Void, Never>?
     @ObservationIgnored let downloadsURL = FileManager.default.homeDirectoryForCurrentUser.appending(path: "Downloads")
 
     private var archiveDays: Int { max(1, UserDefaults.standard.integer(forKey: "archiveDays").nonZero(or: 7)) }
@@ -71,9 +84,7 @@ final class AppState {
     }
     var awaitingAnalysisFiles: [FileRecord] {
         guard classificationMode == .smartContent else { return [] }
-        return readyFiles.filter {
-            $0.source == .rule && ($0.confidence < minimumConfidence || $0.category == .archives)
-        }
+        return files.filter(needsAnalysis)
     }
     var needsHumanReviewFiles: [FileRecord] {
         readyFiles.filter {
@@ -93,6 +104,17 @@ final class AppState {
     }
     var duplicateExtraCount: Int { duplicateGroups.reduce(0) { $0 + $1.extras.count } }
     var duplicateWastedSize: Int64 { duplicateGroups.reduce(0) { $0 + $1.wastedSize } }
+    var extractedArchiveCount: Int { extractedArchives.count }
+    var extractedArchiveReclaimableSize: Int64 {
+        extractedArchives.reduce(0) { $0 + $1.archiveSize }
+    }
+    var redundantInstallerCount: Int { redundantInstallers.count }
+    var redundantInstallerReclaimableSize: Int64 {
+        redundantInstallers.reduce(0) { $0 + $1.installerSize }
+    }
+    var totalReclaimableSize: Int64 {
+        duplicateWastedSize + extractedArchiveReclaimableSize + redundantInstallerReclaimableSize
+    }
     var intelligenceReady: Bool { intelligenceAvailability.isReady }
     var intelligenceStatusTitle: String { intelligenceAvailability.title }
     var intelligenceStatusDetail: String { intelligenceAvailability.detail }
@@ -107,6 +129,8 @@ final class AppState {
     deinit {
         automaticTask?.cancel()
         duplicateScanTask?.cancel()
+        archiveScanTask?.cancel()
+        installerScanTask?.cancel()
     }
 
     func definition(for category: ArchiveCategory) -> CategoryDefinition {
@@ -134,6 +158,11 @@ final class AppState {
             mode: classificationMode
         )
         folderBranding.brandManagedFolders(downloadsURL: downloadsURL, profile: profile)
+        if !files.isEmpty {
+            try? await store.pruneDecisions(
+                keeping: FileScanner.livePaths(for: files, downloadsURL: downloadsURL)
+            )
+        }
         status = classificationMode == .formatOnly
             ? "Scanned \(files.count.formatted()) files • Organized by format"
             : "Scanned \(files.count.formatted()) files • Smart content mode"
@@ -257,12 +286,11 @@ final class AppState {
             lastError = intelligenceStatusDetail
             return
         }
-        let candidates = files.indices.filter {
-            !files[$0].isOrganized
-                && files[$0].dateAdded < cutoffDate
-                && files[$0].source == .rule
-                && (files[$0].confidence < minimumConfidence || files[$0].category == .archives)
-        }
+        // Identify work by file id, never by array index: `files` is replaced
+        // wholesale by any rescan, and this loop suspends on extraction and on
+        // the model. An index captured before an await can point at a
+        // different file — or past the end of the array — once it resumes.
+        let candidates = files.filter(needsAnalysis).map(\.id)
         let selected = limit.map { Array(candidates.prefix($0)) } ?? candidates
         guard !selected.isEmpty else {
             status = "Nothing needs AI analysis"
@@ -280,23 +308,28 @@ final class AppState {
         }
 
         var completed = 0
-        for index in selected {
+        var pendingDecisions: [SavedDecision] = []
+        for id in selected {
             guard !Task.isCancelled, !shouldCancelAnalysis else { break }
-            let record = files[index]
+            guard let record = files.first(where: { $0.id == id }) else { continue }
             status = "Reading \(record.name)…"
             let type = UTType(record.contentType)
             let excerpt = await extractor.extract(from: record.url, contentType: type)
+
             if let localDecision = EvidenceClassifier.classify(excerpt, profile: profile) {
-                files[index].category = localDecision.category
-                files[index].confidence = localDecision.confidence
-                files[index].reason = localDecision.reason
-                files[index].source = .localContent
-                files[index].excerpt = excerpt
-                try? await saveDecision(for: files[index])
+                if let updated = apply(to: id, excerpt: excerpt, {
+                    $0.category = localDecision.category
+                    $0.confidence = localDecision.confidence
+                    $0.reason = localDecision.reason
+                    $0.source = .localContent
+                }) {
+                    pendingDecisions.append(decision(for: updated))
+                }
                 completed += 1
                 progress = Double(completed) / Double(selected.count)
                 continue
             }
+
             do {
                 status = "Apple Intelligence • \(completed + 1) of \(selected.count)"
                 let (result, definition) = try await ai.classify(
@@ -305,35 +338,71 @@ final class AppState {
                     categories: profile.enabledCategories
                 )
                 let category = definition.category
-                if category == .needsReview, record.category != .needsReview {
-                    files[index].category = record.category
-                    files[index].confidence = max(record.confidence, minimumConfidence)
-                    files[index].reason = "Known \(self.definition(for: record.category).name) format; no stronger subject was found"
-                    files[index].source = .formatFallback
-                } else {
-                    files[index].category = category
-                    files[index].confidence = category == .needsReview ? min(result.confidence, 59) : result.confidence
-                    files[index].reason = cleanReason(result.reason, category: category)
-                    files[index].source = .appleAI
+                if let updated = apply(to: id, excerpt: excerpt, { file in
+                    if category == .needsReview, record.category != .needsReview {
+                        file.category = record.category
+                        file.confidence = max(record.confidence, self.minimumConfidence)
+                        file.reason = "Known \(self.definition(for: record.category).name) format; no stronger subject was found"
+                        file.source = .formatFallback
+                    } else {
+                        file.category = category
+                        file.confidence = category == .needsReview ? min(result.confidence, 59) : result.confidence
+                        file.reason = self.cleanReason(result.reason, category: category)
+                        file.source = .appleAI
+                    }
+                }) {
+                    pendingDecisions.append(decision(for: updated))
                 }
-                files[index].excerpt = excerpt
-                try await saveDecision(for: files[index])
             } catch {
                 // A temporary model failure must never erase a useful format rule.
-                files[index] = record
+                if let index = files.firstIndex(where: { $0.id == id }) {
+                    files[index] = record
+                }
                 lastError = error.localizedDescription
             }
             completed += 1
             progress = Double(completed) / Double(selected.count)
+        }
+
+        // One write for the whole run instead of a full re-encode per file.
+        if !pendingDecisions.isEmpty {
+            try? await store.save(contentsOf: pendingDecisions)
         }
         status = shouldCancelAnalysis
             ? "Stopped after \(completed) files • Decisions saved"
             : "Analyzed \(completed) files • No files moved"
     }
 
+    /// Owns the analysis task so other workflows can wait for it to finish
+    /// instead of racing a run that is still winding down.
+    func startAnalysis(limit: Int? = nil) {
+        guard !isWorking else { return }
+        analysisTask = Task { [weak self] in await self?.analyzeReady(limit: limit) }
+    }
+
     func cancelAnalysis() {
         shouldCancelAnalysis = true
         status = "Stopping after the current file…"
+    }
+
+    private func needsAnalysis(_ record: FileRecord) -> Bool {
+        !record.isOrganized
+            && record.dateAdded < cutoffDate
+            && record.source == .rule
+            && (record.confidence < minimumConfidence || record.category == .archives)
+    }
+
+    /// Re-resolves a file by id and mutates it in place. Returns nil when the
+    /// file disappeared from the list while the caller was suspended.
+    private func apply(
+        to id: String,
+        excerpt: String,
+        _ mutate: (inout FileRecord) -> Void
+    ) -> FileRecord? {
+        guard let index = files.firstIndex(where: { $0.id == id }) else { return nil }
+        mutate(&files[index])
+        files[index].excerpt = excerpt
+        return files[index]
     }
 
     func startDuplicateScan() {
@@ -380,7 +449,7 @@ final class AppState {
         status = "Moving duplicate copies to Trash…"
         do {
             let count = try await duplicateScanner.trashExtras(in: group)
-            status = "Moved \(count) exact duplicate copies to Trash"
+            status = "Moved \(count) exact duplicate \(count == 1 ? "copy" : "copies") to Trash"
             duplicateGroups = await duplicateScanner.scan(root: downloadsURL)
             await scan()
         } catch {
@@ -390,9 +459,163 @@ final class AppState {
         isWorking = false
     }
 
+    func startExtractedArchiveScan() {
+        guard !isWorking else { return }
+        archiveScanTask?.cancel()
+        archiveScanTask = Task { [weak self] in await self?.scanExtractedArchives() }
+    }
+
+    func scanExtractedArchives() async {
+        guard !isWorking else { return }
+        isWorking = true
+        isScanningExtractedArchives = true
+        extractedArchiveScanProgress = nil
+        status = "Checking which archives are already unpacked…"
+        let result = await archiveScanner.scan(
+            root: downloadsURL,
+            profile: profile
+        ) { [weak self] update in
+            await MainActor.run {
+                self?.extractedArchiveScanProgress = update
+                self?.progress = update.fraction
+                self?.status = update.currentArchive.map { "Checking \($0)…" }
+                    ?? "Checking archives…"
+            }
+        }
+        if !Task.isCancelled {
+            extractedArchives = result
+            hasScannedExtractedArchives = true
+        }
+        isScanningExtractedArchives = false
+        isWorking = false
+        progress = nil
+        extractedArchiveScanProgress = nil
+        status = Task.isCancelled
+            ? "Archive check stopped"
+            : extractedArchives.isEmpty
+                ? "No archives are fully unpacked yet"
+                : "\(extractedArchiveCount) unpacked archives • \(ByteCountFormatter.string(fromByteCount: extractedArchiveReclaimableSize, countStyle: .file)) reclaimable"
+    }
+
+    func cancelExtractedArchiveScan() {
+        archiveScanTask?.cancel()
+        status = "Stopping archive check…"
+    }
+
+    func trashExtractedArchives(_ archives: [ExtractedArchive]) async {
+        guard !isWorking, !archives.isEmpty else { return }
+        isWorking = true
+        status = "Moving unpacked archives to Trash…"
+        defer { isWorking = false }
+
+        var reclaimed: Int64 = 0
+        var resolved: Set<String> = []
+        var firstFailure: String?
+        for archive in archives {
+            do {
+                if try await archiveScanner.trash(archive) {
+                    reclaimed += archive.archiveSize
+                }
+                // Either it moved to Trash or it was already gone; both mean
+                // it no longer belongs in the list.
+                resolved.insert(archive.id)
+            } catch {
+                if firstFailure == nil { firstFailure = error.localizedDescription }
+            }
+        }
+
+        let trashed = resolved.count
+        extractedArchives.removeAll { resolved.contains($0.id) }
+        lastError = firstFailure
+        status = trashed == 0
+            ? "No archives were moved to Trash"
+            : "Moved \(trashed) unpacked \(trashed == 1 ? "archive" : "archives") to Trash • \(ByteCountFormatter.string(fromByteCount: reclaimed, countStyle: .file)) reclaimed"
+        await scan()
+    }
+
+    func startInstallerScan() {
+        guard !isWorking else { return }
+        installerScanTask?.cancel()
+        installerScanTask = Task { [weak self] in await self?.scanInstallers() }
+    }
+
+    func scanInstallers() async {
+        guard !isWorking else { return }
+        isWorking = true
+        isScanningInstallers = true
+        installerScanProgress = nil
+        status = "Checking which installers you have already used…"
+        let result = await installerScanner.scan(root: downloadsURL, profile: profile) { [weak self] update in
+            await MainActor.run {
+                self?.installerScanProgress = update
+                self?.progress = update.fraction
+                self?.status = update.currentInstaller.map { "Checking \($0)…" }
+                    ?? "Checking installers…"
+            }
+        }
+        if !Task.isCancelled {
+            redundantInstallers = result
+            hasScannedInstallers = true
+        }
+        isScanningInstallers = false
+        isWorking = false
+        progress = nil
+        installerScanProgress = nil
+        status = Task.isCancelled
+            ? "Installer check stopped"
+            : redundantInstallers.isEmpty
+                ? "No installers match software already on this Mac"
+                : "\(redundantInstallerCount) used installers • \(ByteCountFormatter.string(fromByteCount: redundantInstallerReclaimableSize, countStyle: .file)) reclaimable"
+    }
+
+    func cancelInstallerScan() {
+        installerScanTask?.cancel()
+        status = "Stopping installer check…"
+    }
+
+    func trashInstallers(_ installers: [RedundantInstaller]) async {
+        guard !isWorking, !installers.isEmpty else { return }
+        isWorking = true
+        status = "Moving used installers to Trash…"
+        defer { isWorking = false }
+
+        var reclaimed: Int64 = 0
+        var resolved: Set<String> = []
+        var firstFailure: String?
+        for installer in installers {
+            do {
+                if try await installerScanner.trash(installer) {
+                    reclaimed += installer.installerSize
+                }
+                resolved.insert(installer.id)
+            } catch {
+                if firstFailure == nil { firstFailure = error.localizedDescription }
+            }
+        }
+
+        let trashed = resolved.count
+        redundantInstallers.removeAll { resolved.contains($0.id) }
+        lastError = firstFailure
+        status = trashed == 0
+            ? "No installers were moved to Trash"
+            : "Moved \(trashed) used \(trashed == 1 ? "installer" : "installers") to Trash • \(ByteCountFormatter.string(fromByteCount: reclaimed, countStyle: .file)) reclaimed"
+        await scan()
+    }
+
+    /// Lets the user pick which copy of a duplicate group survives cleanup.
+    func setDuplicateKeeper(_ url: URL, in group: DuplicateGroup) {
+        guard let index = duplicateGroups.firstIndex(where: { $0.id == group.id }) else { return }
+        duplicateGroups[index] = duplicateGroups[index].keeping(url)
+    }
+
     func setClassificationMode(_ mode: ClassificationMode) async {
         guard mode != classificationMode else { return }
-        if isAnalyzing { cancelAnalysis() }
+        // Rescanning replaces `files` wholesale, so the analysis run has to be
+        // fully stopped first rather than merely asked to stop.
+        if isAnalyzing {
+            cancelAnalysis()
+            await analysisTask?.value
+        }
         classificationMode = mode
         UserDefaults.standard.set(mode.rawValue, forKey: "classificationMode")
         await scan()
@@ -568,7 +791,7 @@ final class AppState {
             case .lastWeek: $0.dateAdded >= cutoffDate
             case .ready: ArchiveEligibility.isEligible($0, cutoffDate: cutoffDate)
             case .all: true
-            case .duplicates: false
+            case .duplicates, .extracted, .installers: false
             }
         }.count
     }
@@ -580,13 +803,17 @@ final class AppState {
         case .lastWeek: record.dateAdded >= cutoffDate
         case .ready: ArchiveEligibility.isEligible(record, cutoffDate: cutoffDate)
         case .all: true
-        case .duplicates: false
+        case .duplicates, .extracted, .installers: false
         }
     }
 
     private func saveDecision(for record: FileRecord) async throws {
+        try await store.save(decision(for: record))
+    }
+
+    private func decision(for record: FileRecord) -> SavedDecision {
         let modified = (try? record.url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-        try await store.save(.init(
+        return .init(
             path: record.url.path,
             modifiedAt: modified,
             category: record.category,
@@ -594,7 +821,7 @@ final class AppState {
             reason: record.reason,
             source: record.source,
             modelVersion: 6
-        ))
+        )
     }
 
     private func cleanReason(_ value: String, category: ArchiveCategory) -> String {

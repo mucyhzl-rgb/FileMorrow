@@ -19,15 +19,15 @@
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-	<string>1.7.1</string>
+    <string>1.8.0</string>
     <key>CFBundleVersion</key>
-	<string>19</string>
+    <string>20</string>
     <key>NSHumanReadableCopyright</key>
     <string>Made by Nabeegh</string>
     <key>NSDownloadsFolderUsageDescription</key>
     <string>FileMorrow needs access to Downloads to classify loose files, organize eligible items, detect duplicates, and undo moves.</string>
     <key>LSMinimumSystemVersion</key>
-    <string>26.0</string>
+    <string>14.0</string>
     <key>NSHighResolutionCapable</key>
     <true/>
 </dict>

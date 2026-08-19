@@ -1,21 +1,27 @@
 import Foundation
+#if canImport(FoundationModels)
 import FoundationModels
+#endif
 
-@Generable
-struct AIClassification {
-    @Guide(description: "Zero-based index of the single best category from the numbered list", .range(0...50))
+/// The classifier's answer, independent of which system produced it, so
+/// callers never need availability annotations of their own.
+struct AIClassification: Sendable {
     var categoryIndex: Int
-
-    @Guide(description: "Confidence from 0 to 100", .range(0...100))
     var confidence: Int
-
-    @Guide(description: "One concise evidence-based reason")
     var reason: String
 }
 
+/// Wraps Apple's on-device model where it exists. On systems without
+/// Foundation Models the rest of the app is unaffected: Format mode, local
+/// evidence scoring, teaching, and every cleanup workflow are unchanged.
 actor AIClassifier {
     var availability: IntelligenceAvailabilityState {
-        IntelligenceAvailabilityState(SystemLanguageModel.default.availability)
+        #if canImport(FoundationModels)
+        if #available(macOS 26, *) {
+            return IntelligenceAvailabilityState(SystemLanguageModel.default.availability)
+        }
+        #endif
+        return .systemTooOld
     }
 
     func classify(
@@ -24,7 +30,44 @@ actor AIClassifier {
         categories: [CategoryDefinition]
     ) async throws -> (AIClassification, CategoryDefinition) {
         let usable = Array(categories.prefix(51))
-        let categoryGuide = usable.enumerated().map { index, category in
+        #if canImport(FoundationModels)
+        if #available(macOS 26, *) {
+            let result = try await FoundationModelClassifier.classify(
+                filename: filename,
+                excerpt: excerpt,
+                categories: usable
+            )
+            guard usable.indices.contains(result.categoryIndex) else {
+                throw AIClassificationError.invalidCategoryIndex
+            }
+            return (result, usable[result.categoryIndex])
+        }
+        #endif
+        throw AIClassificationError.systemTooOld
+    }
+}
+
+#if canImport(FoundationModels)
+@available(macOS 26, *)
+private enum FoundationModelClassifier {
+    @Generable
+    struct Response {
+        @Guide(description: "Zero-based index of the single best category from the numbered list", .range(0...50))
+        var categoryIndex: Int
+
+        @Guide(description: "Confidence from 0 to 100", .range(0...100))
+        var confidence: Int
+
+        @Guide(description: "One concise evidence-based reason")
+        var reason: String
+    }
+
+    static func classify(
+        filename: String,
+        excerpt: String,
+        categories: [CategoryDefinition]
+    ) async throws -> AIClassification {
+        let categoryGuide = categories.enumerated().map { index, category in
             """
             \(index). \(category.name)
                Purpose: \(category.description)
@@ -52,18 +95,26 @@ actor AIClassifier {
         Extracted local evidence:
         \(excerpt)
         """
-        let result = try await session.respond(to: prompt, generating: AIClassification.self).content
-        guard usable.indices.contains(result.categoryIndex) else {
-            throw AIClassificationError.invalidCategoryIndex
-        }
-        return (result, usable[result.categoryIndex])
+        let response = try await session.respond(to: prompt, generating: Response.self).content
+        return AIClassification(
+            categoryIndex: response.categoryIndex,
+            confidence: response.confidence,
+            reason: response.reason
+        )
     }
 }
+#endif
 
 enum AIClassificationError: LocalizedError {
     case invalidCategoryIndex
+    case systemTooOld
 
     var errorDescription: String? {
-        "Apple Intelligence returned a category outside the active profile."
+        switch self {
+        case .invalidCategoryIndex:
+            "Apple Intelligence returned a category outside the active profile."
+        case .systemTooOld:
+            "Smart Content needs macOS 26. Format mode organizes everything by file type on this Mac."
+        }
     }
 }

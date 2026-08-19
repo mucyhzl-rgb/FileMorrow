@@ -1,6 +1,9 @@
 import Foundation
 
 actor OrganizerService {
+    /// Files the last run could not move, e.g. locked or permission-denied.
+    private(set) var skippedCount = 0
+
     private let store: PersistenceStore
 
     init(store: PersistenceStore) {
@@ -15,6 +18,7 @@ actor OrganizerService {
     ) async throws -> Int {
         var operations: [MoveOperation] = []
         var firstError: Error?
+        var failures = 0
 
         for record in records where record.confidence >= minimumConfidence && record.category != .needsReview {
             do {
@@ -30,15 +34,20 @@ actor OrganizerService {
                 try FileManager.default.moveItem(at: record.url, to: destination)
                 operations.append(.init(originalPath: record.url.path, destinationPath: destination.path))
             } catch {
-                firstError = error
-                break
+                // One unreadable or locked file must not strand every file
+                // behind it; report the first failure after finishing the rest.
+                if firstError == nil { firstError = error }
+                failures += 1
             }
         }
 
         if !operations.isEmpty {
             try await store.append(.init(id: UUID(), createdAt: .now, operations: operations))
         }
-        if let firstError { throw firstError }
+        // Surface a failure only when nothing moved. A partial run already
+        // organized real files and has undo history worth keeping visible.
+        if let firstError, operations.isEmpty { throw firstError }
+        skippedCount = failures
         return operations.count
     }
 
