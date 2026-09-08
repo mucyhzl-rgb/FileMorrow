@@ -97,9 +97,19 @@ final class AppState {
     var totalSize: Int64 { files.reduce(0) { $0 + $1.size } }
     var enabledCategories: [CategoryDefinition] { profile.enabledCategories }
     var visibleCategories: [CategoryDefinition] {
-        enabledCategories.filter { definition in
-            definition.category != .needsReview
-                && files.contains { $0.category == definition.category }
+        let downloads = FileManager.default.homeDirectoryForCurrentUser
+            .appending(path: "Downloads", directoryHint: .isDirectory)
+        return enabledCategories.filter { definition in
+            guard definition.category != .needsReview else { return false }
+            if files.contains(where: { $0.category == definition.category }) {
+                return true
+            }
+            return definition.managedFolderNames.contains { folderName in
+                let folder = downloads.appending(path: folderName, directoryHint: .isDirectory)
+                var isDirectory: ObjCBool = false
+                return FileManager.default.fileExists(atPath: folder.path, isDirectory: &isDirectory)
+                    && isDirectory.boolValue
+            }
         }
     }
     var duplicateExtraCount: Int { duplicateGroups.reduce(0) { $0 + $1.extras.count } }

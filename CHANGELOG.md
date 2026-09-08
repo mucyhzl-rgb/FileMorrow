@@ -10,6 +10,8 @@ All notable FileMorrow changes are documented here.
   decisions still load.
 - Remember English category folder names so already-organized files remain
   visible after the default folders switch to Chinese.
+- Show a sidebar category whenever its Downloads folder exists, not only when
+  loose files in that category have already been scanned.
 
 ## 1.8.0 — 2026-08-20
 
