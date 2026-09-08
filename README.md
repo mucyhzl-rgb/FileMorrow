@@ -3,8 +3,8 @@
 <p align="center">
   <img src="Assets/FileMorrowIconTransparent.png" width="128" alt="FileMorrow app icon">
   <br><br>
-  <a href="https://github.com/M-Nabeegh/FileMorrow/releases/latest">
-    <img src="https://img.shields.io/github/v/release/M-Nabeegh/FileMorrow?style=for-the-badge&logo=apple&logoColor=white&label=Download&color=6C63FF" alt="Download the latest FileMorrow release">
+  <a href="https://github.com/mucyhzl-rgb/FileMorrow/releases/latest">
+    <img src="https://img.shields.io/github/v/release/mucyhzl-rgb/FileMorrow?style=for-the-badge&logo=apple&logoColor=white&label=Download&color=6C63FF" alt="Download the latest FileMorrow release">
   </a>
 </p>
 
@@ -15,8 +15,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/M-Nabeegh/FileMorrow/actions/workflows/ci.yml"><img src="https://github.com/M-Nabeegh/FileMorrow/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/M-Nabeegh/FileMorrow/releases/latest"><img src="https://img.shields.io/github/v/release/M-Nabeegh/FileMorrow" alt="Latest release"></a>
+  <a href="https://github.com/mucyhzl-rgb/FileMorrow/actions/workflows/ci.yml"><img src="https://github.com/mucyhzl-rgb/FileMorrow/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/mucyhzl-rgb/FileMorrow/releases/latest"><img src="https://img.shields.io/github/v/release/mucyhzl-rgb/FileMorrow" alt="Latest release"></a>
   <img src="https://img.shields.io/badge/privacy-local--first-5b5bd6" alt="Local-first privacy">
 </p>
 
