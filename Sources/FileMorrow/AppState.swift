@@ -56,7 +56,10 @@ final class AppState {
     @ObservationIgnored private var archiveScanTask: Task<Void, Never>?
     @ObservationIgnored private var installerScanTask: Task<Void, Never>?
     @ObservationIgnored private var analysisTask: Task<Void, Never>?
+    @ObservationIgnored private var lastScanAt: Date?
     @ObservationIgnored let downloadsURL = FileManager.default.homeDirectoryForCurrentUser.appending(path: "Downloads")
+    private static let activationRefreshCooldown: TimeInterval = 5
+    private static let automaticScanReuseWindow: TimeInterval = 30
 
     private var archiveDays: Int { max(1, UserDefaults.standard.integer(forKey: "archiveDays").nonZero(or: 7)) }
     var minimumConfidence: Int { max(60, UserDefaults.standard.integer(forKey: "minimumConfidence").nonZero(or: 85)) }
@@ -157,10 +160,12 @@ final class AppState {
         isWorking = true
         progress = nil
         status = "正在扫描下载文件夹…"
-        defer { isWorking = false }
+        defer {
+            isWorking = false
+            lastScanAt = Date()
+        }
         let saved = await store.decisions()
         profile = await profileStore.load()
-        intelligenceAvailability = await ai.availability
         files = await scanner.scan(
             downloadsURL: downloadsURL,
             saved: saved,
@@ -177,10 +182,14 @@ final class AppState {
             ? "已扫描 \(files.count.formatted()) 个文件 • 按格式整理"
             : "已扫描 \(files.count.formatted()) 个文件 • 智能内容模式"
         if selectedFileID != nil && selectedFile == nil { selectedFileID = nil }
+        Task { await refreshIntelligenceAvailability() }
     }
 
     func refreshAfterActivation() async {
         guard !isWorking else { return }
+        if let lastScanAt, Date().timeIntervalSince(lastScanAt) < Self.activationRefreshCooldown {
+            return
+        }
         let previousCount = files.count
         let previousSelection = selectedFileID
         await scan()
@@ -242,7 +251,9 @@ final class AppState {
               automaticOrganization,
               !isWorking
         else { return }
-        await scan()
+        if !hasFreshScan(within: Self.automaticScanReuseWindow) {
+            await scan()
+        }
 
         if classificationMode == .smartContent, intelligenceReady, !awaitingAnalysisFiles.isEmpty {
             await analyzeReady()
@@ -866,8 +877,22 @@ final class AppState {
         }
     }
 
+    private func refreshIntelligenceAvailability() async {
+        intelligenceAvailability = await ai.availability
+    }
+
+    private func hasFreshScan(within interval: TimeInterval) -> Bool {
+        guard let lastScanAt else { return false }
+        return Date().timeIntervalSince(lastScanAt) < interval
+    }
+
     private func startAutomaticScheduler() {
         automaticTask = Task { [weak self] in
+            // Let the first window scan own relaunch. Hourly checks start after that.
+            try? await Task.sleep(for: .seconds(8))
+            while self?.isWorking == true, !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(200))
+            }
             await self?.runAutomaticOrganization()
             while !Task.isCancelled {
                 try? await Task.sleep(for: .seconds(3_600))

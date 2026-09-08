@@ -2,6 +2,14 @@
 
 All notable FileMorrow changes are documented here.
 
+## 1.8.2 — 2026-09-08
+
+- Skip redrawing category folder icons on relaunch when the current look is
+  already on disk, so quitting and reopening no longer hitch the UI.
+- Do not scan Downloads twice at startup: the window scan owns relaunch, the
+  hourly automatic check waits, and a fresh scan is reused instead of repeated.
+- Check Apple Intelligence availability after the first file list is on screen.
+
 ## 1.8.1 — 2026-09-08
 
 - Localize the app interface, status messages, onboarding, settings, and

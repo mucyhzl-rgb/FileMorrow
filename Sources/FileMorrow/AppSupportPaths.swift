@@ -3,6 +3,7 @@ import Foundation
 enum AppSupportPaths {
     static let managedMarkerName = ".filemorrow-managed"
     static let legacyManagedMarkerName = ".downloads-butler-managed"
+    static let iconStampName = ".filemorrow-icon-stamp"
 
     static func directory(
         fileManager: FileManager = .default,

@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 actor FileScanner {
     private let ignoredNames: Set<String> = [
         ".DS_Store", ".localized", ".downloads-butler-source", "DownloadsButler",
-        "Downloads Butler Archive", "FileMorrow Archive"
+        "Downloads Butler Archive", "FileMorrow Archive", AppSupportPaths.iconStampName
     ]
     private let ageURL: URL
     private let recoveryFlagURL: URL

@@ -10,6 +10,8 @@ app_dir="$output_dir/FileMorrow.app"
 # FoundationModelsMacros. @State and @Generable then fail. Prefer full Xcode.
 if [[ -d /Applications/Xcode.app/Contents/Developer ]]; then
   export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+elif [[ -d /Applications/Xcode-beta.app/Contents/Developer ]]; then
+  export DEVELOPER_DIR=/Applications/Xcode-beta.app/Contents/Developer
 elif ! xcrun --find swift >/dev/null 2>&1 || [[ "$(xcode-select -p)" == *CommandLineTools* ]]; then
   print -u2 "需要完整 Xcode 才能打包 FileMorrow，不能只用命令行工具。"
   print -u2 "1. 从 App Store 安装 Xcode，打开一次并完成组件安装"

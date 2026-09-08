@@ -41,4 +41,8 @@ final class AppConfigurationTests: XCTestCase {
         XCTAssertTrue(AppSupportPaths.hasManagedMarker(in: legacyFolder))
         XCTAssertTrue(AppSupportPaths.hasManagedMarker(in: currentFolder))
     }
+
+    func testIconStampNameIsStable() {
+        XCTAssertEqual(AppSupportPaths.iconStampName, ".filemorrow-icon-stamp")
+    }
 }
