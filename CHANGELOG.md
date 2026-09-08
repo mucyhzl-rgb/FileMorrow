@@ -2,7 +2,7 @@
 
 All notable FileMorrow changes are documented here.
 
-## Unreleased
+## 1.8.1 — 2026-09-08
 
 - Localize the app interface, status messages, onboarding, settings, and
   default category names into Simplified Chinese.
