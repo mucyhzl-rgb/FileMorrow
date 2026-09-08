@@ -92,6 +92,10 @@ actor ProfileStore {
                 || englishDescriptions[builtIn.id] == result.categories[index].description {
                 result.categories[index].description = builtIn.description
             }
+            if shouldRefreshLook(result.categories[index], from: builtIn) {
+                result.categories[index].icon = builtIn.icon
+                result.categories[index].color = builtIn.color
+            }
         }
         return result
     }
@@ -100,6 +104,14 @@ actor ProfileStore {
     /// a field when the user has not customized it.
     private func isEnglishDisplay(_ value: String, id: String) -> Bool {
         value == id || value == CategoryDefinition.englishFolderAliases[id]
+    }
+
+    /// Refresh shipped icons and colors, but leave a restyled category alone.
+    private func shouldRefreshLook(_ personal: CategoryDefinition, from builtIn: CategoryDefinition) -> Bool {
+        guard personal.icon != builtIn.icon || personal.color != builtIn.color else { return false }
+        return CategoryDefinition.legacyLooks[builtIn.id]?.contains {
+            $0.icon == personal.icon && $0.color == personal.color
+        } == true
     }
 
     private var englishDescriptions: [String: String] {
@@ -216,8 +228,8 @@ actor ProfileStore {
                 id: ArchiveCategory.documents.rawValue,
                 name: "文档",
                 folderName: "文档",
-                icon: "doc.fill",
-                color: "gray",
+                icon: "books.vertical.fill",
+                color: "indigo",
                 description: "常规文档",
                 enabled: true,
                 extensions: ["pdf", "doc", "docx", "ppt", "pptx", "key", "txt"],
@@ -231,7 +243,7 @@ actor ProfileStore {
                 id: ArchiveCategory.other.rawValue,
                 name: "其他",
                 folderName: "其他",
-                icon: "square.grid.2x2.fill",
+                icon: "tray.full.fill",
                 color: "gray",
                 description: "不支持或没有扩展名的文件",
                 enabled: true,

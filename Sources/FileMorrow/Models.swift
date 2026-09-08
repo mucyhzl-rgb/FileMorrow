@@ -90,8 +90,28 @@ struct CategoryDefinition: Codable, Hashable, Identifiable, Sendable {
         return names
     }
 
-    var swiftUIColor: Color {
-        switch color.lowercased() {
+    var swiftUIColor: Color { Self.color(named: displayColorName) }
+
+    /// The SF Symbol shown in the sidebar and file list. Built-in categories
+    /// keep a current look even when an older profile still stores a flatter icon.
+    var displayIcon: String {
+        guard let look = Self.builtInLooks[id] else { return icon }
+        return usesShippedOrLegacyLook ? look.icon : icon
+    }
+    var displayColorName: String {
+        guard let look = Self.builtInLooks[id] else { return color }
+        return usesShippedOrLegacyLook ? look.color : color
+    }
+
+    private var usesShippedOrLegacyLook: Bool {
+        if let look = Self.builtInLooks[id], icon == look.icon, color == look.color {
+            return true
+        }
+        return Self.legacyLooks[id]?.contains { $0.icon == icon && $0.color == color } == true
+    }
+
+    static func color(named value: String) -> Color {
+        switch value.lowercased() {
         case "red": .red
         case "orange": .orange
         case "yellow": .yellow
@@ -107,6 +127,41 @@ struct CategoryDefinition: Codable, Hashable, Identifiable, Sendable {
         default: .indigo
         }
     }
+
+    static let builtInLooks: [String: (icon: String, color: String)] = [
+        "University": ("graduationcap.fill", "indigo"),
+        "Finance & PSX": ("chart.line.uptrend.xyaxis", "green"),
+        "Medical": ("cross.case.fill", "red"),
+        "Work": ("briefcase.fill", "blue"),
+        "Personal": ("person.fill", "pink"),
+        "Travel & Immigration": ("airplane", "cyan"),
+        "Legal": ("building.columns.fill", "brown"),
+        "Documents": ("books.vertical.fill", "indigo"),
+        "Images": ("photo.fill", "mint"),
+        "Image Assets": ("photo.on.rectangle.angled", "teal"),
+        "Videos": ("film.stack.fill", "orange"),
+        "Music": ("headphones", "pink"),
+        "Apps & Installers": ("arrow.down.app.fill", "teal"),
+        "Archives": ("archivebox.fill", "orange"),
+        "Design": ("paintpalette.fill", "purple"),
+        "Code & Data": ("chevron.left.forwardslash.chevron.right", "indigo"),
+        "Spreadsheets & Data": ("tablecells.fill", "green"),
+        "System & Diagnostics": ("stethoscope", "orange"),
+        "Projects & Plugins": ("puzzlepiece.extension.fill", "blue"),
+        "Other": ("tray.full.fill", "gray"),
+        "Needs Review": ("questionmark.folder.fill", "gray")
+    ]
+
+    static let legacyLooks: [String: [(icon: String, color: String)]] = [
+        "Personal": [("person.crop.circle.fill", "pink")],
+        "Documents": [("doc.fill", "gray")],
+        "Videos": [("film.fill", "orange")],
+        "Music": [("music.note", "pink")],
+        "Apps & Installers": [("shippingbox.fill", "teal"), ("app.badge.fill", "teal")],
+        "Archives": [("archivebox.fill", "yellow"), ("zipper.page", "orange"), ("doc.zipper", "orange")],
+        "Other": [("square.grid.2x2.fill", "gray")],
+        "Image Assets": [("photo.on.rectangle", "teal")]
+    ]
 }
 
 struct OrganizationProfile: Codable, Sendable {

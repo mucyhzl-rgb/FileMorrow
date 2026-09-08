@@ -116,25 +116,32 @@ struct SidebarView: View {
 
     var body: some View {
         List(selection: Binding(
-            get: { state.ageSelection },
-            set: { selection in
-                state.ageSelection = selection
-                if ![.duplicates, .extracted, .installers].contains(selection) {
-                    state.categoryFilter = nil
+            get: {
+                if let category = state.categoryFilter {
+                    return SidebarSelection(age: .all, category: category, showsCategories: true)
                 }
+                if state.isBrowsingCategories {
+                    return .allCategories
+                }
+                return SidebarSelection(age: state.ageSelection)
+            },
+            set: { selection in
+                state.ageSelection = selection.age
+                state.categoryFilter = selection.category
+                state.isBrowsingCategories = selection.showsCategories
             }
         )) {
             Section("最近") {
                 ForEach([AgeView.today, .yesterday, .lastWeek]) { item in
                     SidebarRow(title: item.rawValue, icon: item.icon, count: state.count(for: item))
-                        .tag(item)
+                        .tag(SidebarSelection(age: item))
                 }
             }
 
             Section("资料库") {
                 ForEach([AgeView.ready, .all]) { item in
                     SidebarRow(title: item.rawValue, icon: item.icon, count: state.count(for: item))
-                        .tag(item)
+                        .tag(SidebarSelection(age: item))
                 }
             }
 
@@ -144,41 +151,40 @@ struct SidebarView: View {
                     icon: AgeView.duplicates.icon,
                     count: state.duplicateExtraCount
                 )
-                .tag(AgeView.duplicates)
+                .tag(SidebarSelection(age: .duplicates))
 
                 SidebarRow(
                     title: AgeView.extracted.rawValue,
                     icon: AgeView.extracted.icon,
                     count: state.extractedArchiveCount
                 )
-                .tag(AgeView.extracted)
+                .tag(SidebarSelection(age: .extracted))
 
                 SidebarRow(
                     title: AgeView.installers.rawValue,
                     icon: AgeView.installers.icon,
                     count: state.redundantInstallerCount
                 )
-                .tag(AgeView.installers)
+                .tag(SidebarSelection(age: .installers))
             }
 
             Section("分类") {
-                Button {
-                    state.categoryFilter = nil
-                    state.ageSelection = .all
-                } label: {
-                    Label("全部分类", systemImage: "square.grid.2x2")
-                }
-                .buttonStyle(.plain)
+                SidebarCategoryRow(
+                    title: "全部分类",
+                    icon: "square.grid.2x2.fill",
+                    color: .indigo,
+                    selected: state.isBrowsingCategories && state.categoryFilter == nil
+                )
+                .tag(SidebarSelection.allCategories)
 
                 ForEach(state.visibleCategories) { definition in
-                    Button {
-                        state.categoryFilter = definition.category
-                        state.ageSelection = .all
-                    } label: {
-                        Label(definition.name, systemImage: definition.icon)
-                            .foregroundStyle(definition.swiftUIColor)
-                    }
-                    .buttonStyle(.plain)
+                    SidebarCategoryRow(
+                        title: definition.name,
+                        icon: definition.displayIcon,
+                        color: definition.swiftUIColor,
+                        selected: state.categoryFilter == definition.category
+                    )
+                    .tag(SidebarSelection(age: .all, category: definition.category, showsCategories: true))
                 }
             }
         }
@@ -208,6 +214,14 @@ struct SidebarView: View {
     }
 }
 
+private struct SidebarSelection: Hashable {
+    var age: AgeView
+    var category: ArchiveCategory? = nil
+    var showsCategories = false
+
+    static var allCategories: Self { .init(age: .all, showsCategories: true) }
+}
+
 private struct SidebarRow: View {
     let title: String
     let icon: String
@@ -224,6 +238,27 @@ private struct SidebarRow: View {
             }
         } icon: {
             Image(systemName: icon)
+        }
+    }
+}
+
+private struct SidebarCategoryRow: View {
+    let title: String
+    let icon: String
+    let color: Color
+    let selected: Bool
+
+    var body: some View {
+        Label {
+            Text(title)
+                .fontWeight(selected ? .semibold : .regular)
+                .foregroundStyle(.primary)
+        } icon: {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 22, height: 22)
+                .background(color.gradient, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
         }
     }
 }
@@ -254,9 +289,7 @@ struct FileListView: View {
                     TableColumn("文件") { file in
                         let definition = state.definition(for: file.category)
                         HStack(spacing: 10) {
-                            Image(systemName: definition.icon)
-                                .foregroundStyle(definition.swiftUIColor)
-                                .frame(width: 20)
+                            CategoryGlyph(definition: definition)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(file.name).lineLimit(1)
                                 Text(file.isOrganized ? "已整理 • \(file.source.title)" : file.source.title)
@@ -290,7 +323,10 @@ struct FileListView: View {
                 }
             }
         }
-        .navigationTitle(state.ageSelection.rawValue)
+        .navigationTitle(
+            state.categoryFilter.map { state.definition(for: $0).name }
+                ?? (state.isBrowsingCategories ? "全部分类" : state.ageSelection.rawValue)
+        )
     }
 }
 
@@ -892,7 +928,7 @@ struct InspectorView: View {
                                 set: { category in Task { await state.correctSelected(to: category) } }
                             )) {
                                 ForEach(state.enabledCategories) { definition in
-                                    Label(definition.name, systemImage: definition.icon)
+                                    Label(definition.name, systemImage: definition.displayIcon)
                                         .tag(definition.category)
                                 }
                             }
@@ -1023,7 +1059,7 @@ private struct TeachOrganizerSheet: View {
             Form {
                 Picker("正确分类", selection: $category) {
                     ForEach(availableCategories) { definition in
-                        Label(definition.name, systemImage: definition.icon)
+                        Label(definition.name, systemImage: definition.displayIcon)
                             .tag(definition.category)
                     }
                 }
@@ -1069,16 +1105,33 @@ private struct TeachOrganizerSheet: View {
     }
 }
 
+private struct CategoryGlyph: View {
+    let definition: CategoryDefinition
+    var size: CGFloat = 22
+
+    var body: some View {
+        Image(systemName: definition.displayIcon)
+            .font(.system(size: size * 0.52, weight: .semibold))
+            .foregroundStyle(.white)
+            .frame(width: size, height: size)
+            .background(definition.swiftUIColor.gradient, in: RoundedRectangle(cornerRadius: size * 0.27, style: .continuous))
+    }
+}
+
 private struct CategoryBadge: View {
     let definition: CategoryDefinition
 
     var body: some View {
-        Label(definition.name, systemImage: definition.icon)
+        Label {
+            Text(definition.name)
+        } icon: {
+            CategoryGlyph(definition: definition, size: 16)
+        }
             .font(.caption.weight(.medium))
-            .foregroundStyle(definition.swiftUIColor)
+            .foregroundStyle(.primary)
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
-            .background(definition.swiftUIColor.opacity(0.10), in: Capsule())
+            .background(definition.swiftUIColor.opacity(0.12), in: Capsule())
     }
 }
 
@@ -1253,9 +1306,7 @@ private struct CategorySettingsView: View {
                         .labelsHidden()
                         .disabled(definition.category == .needsReview)
 
-                        Image(systemName: definition.icon)
-                            .foregroundStyle(definition.swiftUIColor)
-                            .frame(width: 22)
+                        CategoryGlyph(definition: definition)
 
                         VStack(alignment: .leading, spacing: 2) {
                             Text(definition.name).font(.headline)

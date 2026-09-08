@@ -247,6 +247,58 @@ final class ProfileStoreTests: XCTestCase {
         XCTAssertEqual(imported.categories.count, profile.categories.count)
     }
 
+
+    func testPreviousBuiltInLookIsRefreshedOnReload() async throws {
+        let older = OrganizationProfile(
+            schemaVersion: 2,
+            name: "通用下载",
+            categories: [
+                .init(
+                    id: "Documents",
+                    name: "文档与书籍",
+                    folderName: "文档与书籍",
+                    icon: "doc.fill",
+                    color: "gray",
+                    description: "没有更明确主题匹配的常规文档、书籍、电子书、笔记和字幕。",
+                    enabled: true,
+                    extensions: ["pdf"],
+                    filenameKeywords: [],
+                    contentKeywords: [],
+                    examples: [],
+                    contentAware: true,
+                    extensionConfidence: 60
+                ),
+                Harness.category(id: "Needs Review")
+            ]
+        )
+        let harness = try Harness(bundled: older)
+        defer { harness.cleanUp() }
+        _ = await harness.store.load()
+
+        let current = TestProfiles.general
+        _ = try Harness.writeBundled(current, at: harness.bundledURL)
+        let reloaded = await Harness.freshStore(harness).load()
+        let documents = try XCTUnwrap(reloaded.categories.first { $0.id == "Documents" })
+        XCTAssertEqual(documents.icon, "books.vertical.fill")
+        XCTAssertEqual(documents.color, "indigo")
+    }
+
+    func testCustomCategoryLookSurvivesIconRefresh() async throws {
+        let harness = try Harness()
+        defer { harness.cleanUp() }
+
+        var profile = await harness.store.load()
+        let index = try XCTUnwrap(profile.categories.firstIndex { $0.id == "Documents" })
+        profile.categories[index].icon = "star.fill"
+        profile.categories[index].color = "pink"
+        try await harness.store.save(profile)
+
+        let reloaded = await Harness.freshStore(harness).load()
+        let documents = try XCTUnwrap(reloaded.categories.first { $0.id == "Documents" })
+        XCTAssertEqual(documents.icon, "star.fill")
+        XCTAssertEqual(documents.color, "pink")
+    }
+
     // MARK: - Harness
 
     private struct Harness {

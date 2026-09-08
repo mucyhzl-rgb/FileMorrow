@@ -2,6 +2,13 @@
 
 All notable FileMorrow changes are documented here.
 
+## 1.8.3 — 2026-09-08
+
+- Give sidebar categories a real selected state, so the current folder is
+  highlighted instead of looking like plain colored text.
+- Show category icons in small colored tiles, and refresh the shipped looks
+  for documents, archives, videos, music, apps, and other.
+
 ## 1.8.2 — 2026-09-08
 
 - Skip redrawing category folder icons on relaunch when the current look is

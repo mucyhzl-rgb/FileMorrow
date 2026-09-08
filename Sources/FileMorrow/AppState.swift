@@ -10,6 +10,7 @@ final class AppState {
     var files: [FileRecord] = []
     var ageSelection: AgeView = .today
     var categoryFilter: ArchiveCategory?
+    var isBrowsingCategories = false
     var selectedFileID: String?
     var query = ""
     var status = "就绪"
