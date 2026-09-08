@@ -1227,7 +1227,7 @@ struct SettingsView: View {
                         get: { state.keepInDock },
                         set: { state.setKeepInDock($0) }
                     ))
-                    Text("关闭后只保留菜单栏。窗口关闭后 FileMorrow 仍会继续运行。")
+                    Text("关掉窗口后，FileMorrow 会留在菜单栏里继续运行。点菜单栏图标或程序坞图标可以再打开窗口。")
                         .foregroundStyle(.secondary)
                 }
 

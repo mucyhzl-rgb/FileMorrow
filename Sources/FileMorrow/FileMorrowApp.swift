@@ -12,6 +12,26 @@ enum DockVisibility {
     }
 }
 
+@MainActor
+final class WindowDirector {
+    static let shared = WindowDirector()
+    var openMainWindow: (() -> Void)?
+
+    func reopenMainWindow() {
+        if let window = NSApplication.shared.windows.first(where: Self.isMainWindow) {
+            window.makeKeyAndOrderFront(nil)
+        } else {
+            openMainWindow?()
+        }
+        NSApplication.shared.activate(ignoringOtherApps: true)
+    }
+
+    static func isMainWindow(_ window: NSWindow) -> Bool {
+        window.canBecomeMain && window.level == .normal && !(window is NSPanel)
+    }
+}
+
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         let keepInDock = UserDefaults.standard.object(forKey: "keepInDock") as? Bool ?? true
@@ -21,6 +41,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         false
     }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            WindowDirector.shared.reopenMainWindow()
+        }
+        sender.activate(ignoringOtherApps: true)
+        return true
+    }
 }
 
 @main
@@ -29,7 +57,7 @@ struct FileMorrowApp: App {
     @State private var state = AppState()
 
     var body: some Scene {
-        WindowGroup("FileMorrow", id: "main") {
+        Window("FileMorrow", id: "main") {
             RootView(state: state)
         }
         .defaultSize(width: 1_280, height: 760)
@@ -73,14 +101,29 @@ struct FileMorrowApp: App {
             }
         }
 
-        MenuBarExtra("FileMorrow", systemImage: "tray.full.fill") {
+        MenuBarExtra(isInserted: .constant(true)) {
             FileMorrowMenu(state: state)
+        } label: {
+            MenuBarLabel()
         }
         .menuBarExtraStyle(.menu)
 
         Settings {
             SettingsView(state: state)
         }
+    }
+}
+
+private struct MenuBarLabel: View {
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Label("FileMorrow", systemImage: "tray.full.fill")
+            .onAppear {
+                WindowDirector.shared.openMainWindow = {
+                    openWindow(id: "main")
+                }
+            }
     }
 }
 

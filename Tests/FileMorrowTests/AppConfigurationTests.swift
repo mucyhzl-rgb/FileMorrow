@@ -45,4 +45,14 @@ final class AppConfigurationTests: XCTestCase {
     func testIconStampNameIsStable() {
         XCTAssertEqual(AppSupportPaths.iconStampName, ".filemorrow-icon-stamp")
     }
+
+    func testLastWindowDoesNotQuitTheApp() {
+        XCTAssertFalse(AppDelegate().applicationShouldTerminateAfterLastWindowClosed(NSApplication.shared))
+    }
+
+    func testReopenWithoutWindowsAsksForTheMainWindow() {
+        XCTAssertTrue(
+            AppDelegate().applicationShouldHandleReopen(NSApplication.shared, hasVisibleWindows: false)
+        )
+    }
 }

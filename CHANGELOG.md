@@ -2,6 +2,11 @@
 
 All notable FileMorrow changes are documented here.
 
+## 1.8.4 — 2026-09-08
+
+- Keep FileMorrow in the menu bar after the main window closes, and reopen
+  that window from the Dock or the menu-bar companion.
+
 ## 1.8.3 — 2026-09-08
 
 - Give sidebar categories a real selected state, so the current folder is
