@@ -35,10 +35,10 @@ struct FileMorrowApp: App {
         .defaultSize(width: 1_280, height: 760)
         .commands {
             CommandGroup(replacing: .appInfo) {
-                Button("About FileMorrow") {
+                Button("关于 FileMorrow") {
                     NSApplication.shared.orderFrontStandardAboutPanel(options: [
                         .credits: NSAttributedString(
-                            string: "Made by Nabeegh",
+                            string: "由 Nabeegh 制作",
                             attributes: [
                                 .font: NSFont.systemFont(ofSize: 13, weight: .medium),
                                 .foregroundColor: NSColor.secondaryLabelColor
@@ -49,25 +49,25 @@ struct FileMorrowApp: App {
             }
 
             CommandGroup(after: .newItem) {
-                Button("Scan Downloads") {
+                Button("扫描下载文件夹") {
                     Task { await state.scan() }
                 }
                 .keyboardShortcut("r")
                 .disabled(state.isWorking)
 
-                Button("Analyze Ready Files") {
+                Button("分析待处理文件") {
                     state.startAnalysis()
                 }
                 .keyboardShortcut("a", modifiers: [.command, .shift])
                 .disabled(state.isWorking || state.classificationMode == .formatOnly)
 
-                Button("Undo Last Organization") {
+                Button("撤销上次整理") {
                     Task { await state.undoLastMove() }
                 }
                 .keyboardShortcut("z", modifiers: .command)
                 .disabled(state.isWorking)
 
-                Button("Show Welcome Guide") {
+                Button("显示欢迎指南") {
                     state.requestOnboarding()
                 }
             }
@@ -89,7 +89,7 @@ private struct FileMorrowMenu: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        Button("Open FileMorrow") {
+        Button("打开 FileMorrow") {
             openWindow(id: "main")
             NSApplication.shared.activate()
         }
@@ -97,20 +97,20 @@ private struct FileMorrowMenu: View {
         Divider()
 
         Text(state.status)
-        Text("\(state.files.count.formatted()) files • \(state.readyFiles.count.formatted()) ready")
+        Text("\(state.files.count.formatted()) 个文件 • \(state.readyFiles.count.formatted()) 个可以归档")
         if state.totalReclaimableSize > 0 {
-            Text("\(ByteCountFormatter.string(fromByteCount: state.totalReclaimableSize, countStyle: .file)) reclaimable from cleanup")
+            Text("清理可回收 \(ByteCountFormatter.string(fromByteCount: state.totalReclaimableSize, countStyle: .file))")
         }
-        Text(state.automaticOrganization ? "Automatic organization: On" : "Automatic organization: Off")
+        Text(state.automaticOrganization ? "自动整理：开" : "自动整理：关")
 
         Divider()
 
-        Button(state.isWorking ? "Scanning…" : "Scan Downloads") {
+        Button(state.isWorking ? "正在扫描…" : "扫描下载文件夹") {
             Task { await state.scan() }
         }
         .disabled(state.isWorking)
 
-        Button(state.organizationProposal == nil ? "Check & Organize Now" : "Review Organization Plan") {
+        Button(state.organizationProposal == nil ? "立即检查并整理" : "查看整理计划") {
             if state.organizationProposal == nil {
                 Task { await state.checkAndPrepareOrganization() }
             } else {
@@ -120,34 +120,34 @@ private struct FileMorrowMenu: View {
         }
         .disabled(state.isWorking)
 
-        Button("Scan for Duplicates") {
+        Button("扫描重复文件") {
             state.startDuplicateScan()
         }
         .disabled(state.isWorking)
 
-        Button("Check Unpacked Archives") {
+        Button("检查已解压压缩包") {
             state.startExtractedArchiveScan()
         }
         .disabled(state.isWorking)
 
-        Button("Check Used Installers") {
+        Button("检查已用安装包") {
             state.startInstallerScan()
         }
         .disabled(state.isWorking)
 
         Divider()
 
-        Button("Show Welcome Guide") {
+        Button("显示欢迎指南") {
             openWindow(id: "main")
             NSApplication.shared.activate()
             state.requestOnboarding()
         }
 
         SettingsLink {
-            Text("Settings…")
+            Text("设置…")
         }
 
-        Button("Quit FileMorrow") {
+        Button("退出 FileMorrow") {
             NSApplication.shared.terminate(nil)
         }
     }

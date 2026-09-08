@@ -68,10 +68,10 @@ final class SyntheticAccuracyTests: XCTestCase {
         XCTAssertFalse(IntelligenceAvailabilityState.appleIntelligenceNotEnabled.isReady)
         XCTAssertFalse(IntelligenceAvailabilityState.deviceNotEligible.isReady)
         XCTAssertFalse(IntelligenceAvailabilityState.modelNotReady.isReady)
-        XCTAssertTrue(IntelligenceAvailabilityState.modelNotReady.detail.contains("Format mode"))
+        XCTAssertTrue(IntelligenceAvailabilityState.modelNotReady.detail.contains("格式模式"))
         XCTAssertFalse(IntelligenceAvailabilityState.systemTooOld.isReady)
         XCTAssertTrue(
-            IntelligenceAvailabilityState.systemTooOld.detail.contains("Format mode"),
+            IntelligenceAvailabilityState.systemTooOld.detail.contains("格式模式"),
             "A Mac below macOS 26 must be told the app still works fully"
         )
     }

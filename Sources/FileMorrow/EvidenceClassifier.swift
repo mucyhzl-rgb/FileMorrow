@@ -23,7 +23,7 @@ enum EvidenceClassifier {
         return .init(
             category: winner.0.category,
             confidence: min(96, 84 + winner.1),
-            reason: "Local content signals: \(winner.2.prefix(3).joined(separator: ", "))"
+            reason: "本地内容信号：\(winner.2.prefix(3).joined(separator: "、"))"
         )
     }
 }

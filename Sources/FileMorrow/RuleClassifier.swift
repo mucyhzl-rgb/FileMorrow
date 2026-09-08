@@ -24,7 +24,7 @@ enum RuleClassifier {
                 return .init(
                     category: winner.0.category,
                     confidence: min(96, 86 + winner.1),
-                    reason: "Filename matches \(winner.0.name)"
+                    reason: "文件名匹配「\(winner.0.name)」"
                 )
             }
         }
@@ -36,24 +36,24 @@ enum RuleClassifier {
                 category: definition.category,
                 confidence: mode == .formatOnly ? 100 : definition.extensionConfidence,
                 reason: mode == .formatOnly
-                    ? "Categorized by .\(ext) file format"
+                    ? "按 .\(ext) 文件格式归类"
                     : definition.contentAware
-                    ? "\(ext.uppercased()) format; content analysis can refine the subject"
-                    : "Known \(definition.name) format"
+                    ? "\(ext.uppercased()) 格式；内容分析可以进一步判断主题"
+                    : "已知的「\(definition.name)」格式"
             )
         }
 
         if type?.conforms(to: .image) == true,
            let definition = enabled.first(where: { $0.id == ArchiveCategory.images.rawValue }) {
-            return .init(category: definition.category, confidence: 100, reason: "Image file")
+            return .init(category: definition.category, confidence: 100, reason: "图片文件")
         }
         if type?.conforms(to: .movie) == true,
            let definition = enabled.first(where: { $0.id == ArchiveCategory.videos.rawValue }) {
-            return .init(category: definition.category, confidence: 100, reason: "Video file")
+            return .init(category: definition.category, confidence: 100, reason: "视频文件")
         }
         if type?.conforms(to: .audio) == true,
            let definition = enabled.first(where: { $0.id == ArchiveCategory.music.rawValue }) {
-            return .init(category: definition.category, confidence: 100, reason: "Audio file")
+            return .init(category: definition.category, confidence: 100, reason: "音频文件")
         }
 
         if mode == .formatOnly,
@@ -62,12 +62,12 @@ enum RuleClassifier {
                 category: other.category,
                 confidence: 100,
                 reason: ext.isEmpty
-                    ? "No file extension; placed in Other"
-                    : "Unsupported .\(ext) format; placed in Other"
+                    ? "没有扩展名，已放入其他"
+                    : "不支持的 .\(ext) 格式，已放入其他"
             )
         }
 
-        return .init(category: .needsReview, confidence: 20, reason: "Unknown format; analysis needed")
+        return .init(category: .needsReview, confidence: 20, reason: "未知格式，需要分析")
     }
 
     static func normalizedExtension(_ url: URL) -> String {

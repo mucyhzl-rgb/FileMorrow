@@ -34,32 +34,32 @@ enum IntelligenceAvailabilityState: String, CaseIterable, Sendable {
 
     var title: String {
         switch self {
-        case .checking: "Checking Apple Intelligence…"
-        case .available: "Apple Intelligence ready"
-        case .appleIntelligenceNotEnabled: "Apple Intelligence is off"
-        case .deviceNotEligible: "This Mac is not eligible"
-        case .modelNotReady: "The on-device model is not ready"
-        case .systemTooOld: "Smart Content needs macOS 26"
-        case .unknown: "Apple Intelligence is unavailable"
+        case .checking: "正在检查 Apple Intelligence…"
+        case .available: "Apple Intelligence 已就绪"
+        case .appleIntelligenceNotEnabled: "Apple Intelligence 未开启"
+        case .deviceNotEligible: "这台 Mac 不支持"
+        case .modelNotReady: "端侧模型尚未就绪"
+        case .systemTooOld: "智能内容需要 macOS 26"
+        case .unknown: "Apple Intelligence 不可用"
         }
     }
 
     var detail: String {
         switch self {
         case .checking:
-            "FileMorrow is checking the on-device Foundation Model."
+            "FileMorrow 正在检查本机的 Foundation Model。"
         case .available:
-            "Smart Content can use the on-device Foundation Model. File evidence stays on this Mac."
+            "智能内容可以使用本机 Foundation Model。文件证据只会留在这台 Mac 上。"
         case .appleIntelligenceNotEnabled:
-            "Turn on Apple Intelligence in System Settings, or keep using reliable Format mode."
+            "请在系统设置中打开 Apple Intelligence，或继续使用更稳妥的格式模式。"
         case .deviceNotEligible:
-            "Smart Content requires macOS 26 and an Apple Intelligence-eligible Mac. Format mode remains fully available."
+            "智能内容需要 macOS 26 以及支持 Apple Intelligence 的 Mac。格式模式仍然完全可用。"
         case .modelNotReady:
-            "The model may still be downloading or temporarily unavailable. Format mode remains fully available."
+            "模型可能仍在下载，或暂时不可用。格式模式仍然完全可用。"
         case .systemTooOld:
-            "This Mac runs an earlier macOS, so the on-device model is not present. Format mode organizes everything by file type and needs no model."
+            "这台 Mac 的系统版本较旧，没有端侧模型。格式模式会按文件类型整理，不需要模型。"
         case .unknown:
-            "FileMorrow could not confirm model availability. Format mode remains fully available."
+            "FileMorrow 无法确认模型是否可用。格式模式仍然完全可用。"
         }
     }
 }

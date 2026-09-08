@@ -2,6 +2,15 @@
 
 All notable FileMorrow changes are documented here.
 
+## Unreleased
+
+- Localize the app interface, status messages, onboarding, settings, and
+  default category names into Simplified Chinese.
+- Keep category IDs and saved classification-mode keys unchanged so existing
+  decisions still load.
+- Remember English category folder names so already-organized files remain
+  visible after the default folders switch to Chinese.
+
 ## 1.8.0 — 2026-08-20
 
 - Lower the requirement to macOS 14 Sonoma. Foundation Models is weak-linked

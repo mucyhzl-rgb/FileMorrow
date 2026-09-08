@@ -57,6 +57,39 @@ struct CategoryDefinition: Codable, Hashable, Identifiable, Sendable {
 
     var category: ArchiveCategory { .init(rawValue: id) }
 
+    /// English folder names from earlier builds, so already-organized files
+    /// stay visible after the default profile switches to Chinese folders.
+    static let englishFolderAliases: [String: String] = [
+        "University": "University",
+        "Finance & PSX": "Finance & Investments",
+        "Medical": "Medical & Health",
+        "Work": "Work",
+        "Personal": "Personal",
+        "Travel & Immigration": "Travel & Immigration",
+        "Legal": "Legal",
+        "Documents": "Documents & Books",
+        "Images": "Images",
+        "Videos": "Videos",
+        "Music": "Music & Audio",
+        "Apps & Installers": "Apps & Installers",
+        "Archives": "Archives",
+        "Design": "Design & Creative",
+        "Code & Data": "Code & Data",
+        "Spreadsheets & Data": "Spreadsheets & Data",
+        "System & Diagnostics": "System & Diagnostics",
+        "Projects & Plugins": "Projects & Plugins",
+        "Other": "Other",
+        "Needs Review": "Needs Review"
+    ]
+
+    var managedFolderNames: [String] {
+        var names = [folderName]
+        if let english = Self.englishFolderAliases[id], english != folderName {
+            names.append(english)
+        }
+        return names
+    }
+
     var swiftUIColor: Color {
         switch color.lowercased() {
         case "red": .red
@@ -100,30 +133,30 @@ enum ClassificationMode: String, CaseIterable, Identifiable, Sendable {
 
     var title: String {
         switch self {
-        case .formatOnly: "By File Format"
-        case .smartContent: "Smart Content"
+        case .formatOnly: "按文件格式"
+        case .smartContent: "智能内容"
         }
     }
 
     var detail: String {
         switch self {
         case .formatOnly:
-            "Fast and predictable. PDFs go to Documents, audio to Music, images to Images, and spreadsheets to Spreadsheets."
+            "快速且可预期。PDF 归入文档，音频归入音乐，图片归入图片，表格归入表格。"
         case .smartContent:
-            "Uses filename metadata, extracted content, and Apple Intelligence to choose subject folders. More personalized, but the on-device model can make mistakes."
+            "根据文件名、提取出的内容和 Apple Intelligence 选择主题文件夹。更贴合内容，但端侧模型也可能分错。"
         }
     }
 }
 
 enum AgeView: String, CaseIterable, Identifiable {
-    case today = "Today"
-    case yesterday = "Yesterday"
-    case lastWeek = "Last 7 Days"
-    case ready = "Ready to Archive"
-    case all = "All Downloads"
-    case duplicates = "Duplicates"
-    case extracted = "Extracted Archives"
-    case installers = "Installers"
+    case today = "今天"
+    case yesterday = "昨天"
+    case lastWeek = "最近 7 天"
+    case ready = "可以归档"
+    case all = "全部下载"
+    case duplicates = "重复文件"
+    case extracted = "已解压压缩包"
+    case installers = "安装包"
 
     var id: String { rawValue }
 
@@ -166,8 +199,8 @@ struct DuplicateGroup: Identifiable, Hashable, Sendable {
 
 struct DuplicateScanProgress: Sendable {
     enum Stage: String, Sendable {
-        case fingerprinting = "Comparing candidates"
-        case verifying = "Verifying exact matches"
+        case fingerprinting = "正在比较候选文件"
+        case verifying = "正在核验完全相同的副本"
     }
 
     let stage: Stage
@@ -220,6 +253,16 @@ enum DecisionSource: String, Codable, Sendable {
     case appleAI = "Apple Intelligence"
     case formatFallback = "Format fallback"
     case user = "Your correction"
+
+    var title: String {
+        switch self {
+        case .rule: "规则"
+        case .localContent: "本地内容"
+        case .appleAI: "Apple Intelligence"
+        case .formatFallback: "格式回退"
+        case .user: "你的更正"
+        }
+    }
 }
 
 struct SavedDecision: Codable, Sendable {
@@ -292,10 +335,10 @@ enum VersionComparison: String, Sendable {
 
     var summary: String {
         switch self {
-        case .installedIsNewer: "Already updated past this version"
-        case .sameVersion: "Same version already installed"
-        case .installerIsNewer: "Newer than what is installed"
-        case .unknownVersion: "Already installed"
+        case .installedIsNewer: "本机版本已经比这个更新"
+        case .sameVersion: "已安装相同版本"
+        case .installerIsNewer: "比已安装的版本更新"
+        case .unknownVersion: "已经安装"
         }
     }
 }
@@ -303,8 +346,8 @@ enum VersionComparison: String, Sendable {
 /// A `.dmg` or `.pkg` in Downloads whose software is already on this Mac.
 struct RedundantInstaller: Identifiable, Hashable, Sendable {
     enum Evidence: String, Sendable {
-        case packageReceipt = "Verified by install receipt"
-        case installedApp = "Matched to an installed app"
+        case packageReceipt = "已通过安装回执核实"
+        case installedApp = "已匹配到本机应用"
     }
 
     let installerURL: URL
@@ -322,11 +365,11 @@ struct RedundantInstaller: Identifiable, Hashable, Sendable {
     var versionSummary: String {
         switch (installerVersion, installedVersion) {
         case let (installer?, installed?):
-            "Installer \(installer) • installed \(installed)"
+            "安装包 \(installer) • 本机 \(installed)"
         case let (nil, installed?):
-            "Installed \(installed)"
+            "本机 \(installed)"
         case let (installer?, nil):
-            "Installer \(installer)"
+            "安装包 \(installer)"
         default:
             comparison.summary
         }

@@ -34,14 +34,16 @@ actor FileScanner {
 
         var candidates = looseURLs.map { ($0, FileLocation.loose) }
         for definition in profile.enabledCategories where definition.category != .needsReview {
-            let folder = downloadsURL.appending(path: definition.folderName, directoryHint: .isDirectory)
-            guard AppSupportPaths.hasManagedMarker(in: folder),
-                  let organizedURLs = try? FileManager.default.contentsOfDirectory(
-                      at: folder,
-                      includingPropertiesForKeys: Array(keys),
-                      options: [.skipsHiddenFiles]
-                  ) else { continue }
-            candidates.append(contentsOf: organizedURLs.map { ($0, FileLocation.organized) })
+            for folderName in definition.managedFolderNames {
+                let folder = downloadsURL.appending(path: folderName, directoryHint: .isDirectory)
+                guard AppSupportPaths.hasManagedMarker(in: folder),
+                      let organizedURLs = try? FileManager.default.contentsOfDirectory(
+                          at: folder,
+                          includingPropertiesForKeys: Array(keys),
+                          options: [.skipsHiddenFiles]
+                      ) else { continue }
+                candidates.append(contentsOf: organizedURLs.map { ($0, FileLocation.organized) })
+            }
         }
 
         var stableAges = loadAges()

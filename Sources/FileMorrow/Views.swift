@@ -21,13 +21,13 @@ struct RootView: View {
                 .navigationSplitViewColumnWidth(min: 280, ideal: 330)
         }
         .navigationSplitViewStyle(.balanced)
-        .searchable(text: $state.query, placement: .toolbar, prompt: "Search Downloads")
+        .searchable(text: $state.query, placement: .toolbar, prompt: "搜索下载文件夹")
         .toolbar {
             ToolbarItemGroup {
                 Button {
                     Task { await state.scan() }
                 } label: {
-                    Label("Scan", systemImage: "arrow.clockwise")
+                    Label("扫描", systemImage: "arrow.clockwise")
                 }
                 .disabled(state.isWorking)
 
@@ -35,18 +35,18 @@ struct RootView: View {
                     Button {
                         state.cancelAnalysis()
                     } label: {
-                        Label("Stop Analysis", systemImage: "stop.fill")
+                        Label("停止分析", systemImage: "stop.fill")
                     }
                 } else {
                     Menu {
-                        Button("Analyze Next 25") {
+                        Button("分析接下来 25 个") {
                             state.startAnalysis(limit: 25)
                         }
-                        Button("Analyze All Remaining") {
+                        Button("分析全部剩余") {
                             state.startAnalysis()
                         }
                     } label: {
-                        Label("Analyze", systemImage: "sparkles")
+                        Label("分析", systemImage: "sparkles")
                     }
                     .disabled(state.isWorking || state.classificationMode == .formatOnly)
                 }
@@ -54,7 +54,7 @@ struct RootView: View {
                 Button {
                     state.prepareOrganizationProposal()
                 } label: {
-                    Label("Organize", systemImage: "folder.badge.plus")
+                    Label("整理", systemImage: "folder.badge.plus")
                 }
                 .disabled(state.isWorking || state.approvedReadyFiles.isEmpty)
                 .buttonStyle(.borderedProminent)
@@ -65,8 +65,8 @@ struct RootView: View {
                 } label: {
                     Label(
                         state.lastOrganizedCount > 0
-                            ? "Undo Last Organization (\(state.lastOrganizedCount))"
-                            : "Undo Last Organization",
+                            ? "撤销上次整理（\(state.lastOrganizedCount)）"
+                            : "撤销上次整理",
                         systemImage: "arrow.uturn.backward"
                     )
                 }
@@ -124,21 +124,21 @@ struct SidebarView: View {
                 }
             }
         )) {
-            Section("Fresh") {
+            Section("最近") {
                 ForEach([AgeView.today, .yesterday, .lastWeek]) { item in
                     SidebarRow(title: item.rawValue, icon: item.icon, count: state.count(for: item))
                         .tag(item)
                 }
             }
 
-            Section("Library") {
+            Section("资料库") {
                 ForEach([AgeView.ready, .all]) { item in
                     SidebarRow(title: item.rawValue, icon: item.icon, count: state.count(for: item))
                         .tag(item)
                 }
             }
 
-            Section("Reclaim Space") {
+            Section("释放空间") {
                 SidebarRow(
                     title: AgeView.duplicates.rawValue,
                     icon: AgeView.duplicates.icon,
@@ -161,12 +161,12 @@ struct SidebarView: View {
                 .tag(AgeView.installers)
             }
 
-            Section("Categories") {
+            Section("分类") {
                 Button {
                     state.categoryFilter = nil
                     state.ageSelection = .all
                 } label: {
-                    Label("All Categories", systemImage: "square.grid.2x2")
+                    Label("全部分类", systemImage: "square.grid.2x2")
                 }
                 .buttonStyle(.plain)
 
@@ -194,7 +194,7 @@ struct SidebarView: View {
                     .lineLimit(2)
                 if state.totalReclaimableSize > 0 {
                     Label(
-                        "\(ByteCountFormatter.string(fromByteCount: state.totalReclaimableSize, countStyle: .file)) reclaimable",
+                        "可回收 \(ByteCountFormatter.string(fromByteCount: state.totalReclaimableSize, countStyle: .file))",
                         systemImage: "internaldrive"
                     )
                     .font(.caption.weight(.medium))
@@ -204,7 +204,7 @@ struct SidebarView: View {
             .padding()
             .background(.ultraThinMaterial)
         }
-        .navigationTitle("Butler")
+        .navigationTitle("管家")
     }
 }
 
@@ -245,13 +245,13 @@ struct FileListView: View {
                     Divider()
                     if state.visibleFiles.isEmpty {
                 ContentUnavailableView(
-                    "Nothing here",
+                    "这里没有文件",
                     systemImage: "tray",
-                    description: Text("Try another date view or clear the search.")
+                    description: Text("换一个日期视图，或清除搜索。")
                 )
                     } else {
                         Table(state.visibleFiles, selection: $state.selectedFileID) {
-                    TableColumn("File") { file in
+                    TableColumn("文件") { file in
                         let definition = state.definition(for: file.category)
                         HStack(spacing: 10) {
                             Image(systemName: definition.icon)
@@ -259,7 +259,7 @@ struct FileListView: View {
                                 .frame(width: 20)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(file.name).lineLimit(1)
-                                Text(file.isOrganized ? "Organized • \(file.source.rawValue)" : file.source.rawValue)
+                                Text(file.isOrganized ? "已整理 • \(file.source.title)" : file.source.title)
                                     .font(.caption2)
                                     .foregroundStyle(.tertiary)
                             }
@@ -267,9 +267,9 @@ struct FileListView: View {
                     }
                     .width(min: 260, ideal: 360)
 
-                    TableColumn("Folder") { file in
+                    TableColumn("文件夹") { file in
                         if file.source == .rule && file.category == .needsReview {
-                            Label("Awaiting Analysis", systemImage: "sparkles")
+                            Label("等待分析", systemImage: "sparkles")
                                 .font(.caption.weight(.medium))
                                 .foregroundStyle(.indigo)
                                 .padding(.horizontal, 8)
@@ -281,7 +281,7 @@ struct FileListView: View {
                     }
                     .width(min: 140, ideal: 170)
 
-                    TableColumn("Confidence") { file in
+                    TableColumn("置信度") { file in
                         ConfidenceView(value: file.confidence)
                     }
                     .width(100)
@@ -301,15 +301,15 @@ private struct DuplicateCenterView: View {
     var body: some View {
         VStack(spacing: 0) {
             CleanupHeader(
-                title: "Exact Duplicates",
-                subtitle: "Every accessible folder inside Downloads is checked read-only. SHA-256 verifies identical bytes; only copies you confirm move to recoverable Trash.",
-                caution: "Nested project and app files can be intentionally identical. Review every full path before using Trash.",
+                title: "完全相同的重复文件",
+                subtitle: "只读检查下载文件夹里每一个能访问的目录。SHA-256 核验字节是否完全相同；只有你确认的副本才会移到可恢复的废纸篓。",
+                caution: "项目和应用程序里的嵌套文件可能本来就相同。移到废纸篓前请核对每一条完整路径。",
                 summary: state.duplicateGroups.isEmpty
                     ? nil
                     : "\(state.duplicateExtraCount) extra copies • \(ByteCountFormatter.string(fromByteCount: state.duplicateWastedSize, countStyle: .file)) reclaimable",
                 isScanning: state.isScanningDuplicates,
-                actionTitle: "Find Duplicates",
-                cancelTitle: "Stop Scan",
+                actionTitle: "查找重复文件",
+                cancelTitle: "停止扫描",
                 isDisabled: state.isWorking,
                 onScan: { state.startDuplicateScan() },
                 onCancel: { state.cancelDuplicateScan() }
@@ -321,28 +321,28 @@ private struct DuplicateCenterView: View {
                 CleanupProgressView(
                     fraction: scan.fraction,
                     headline: scan.stage.rawValue,
-                    detail: "\(scan.completedFiles.formatted()) of \(scan.totalFiles.formatted()) checks • \(ByteCountFormatter.string(fromByteCount: scan.processedBytes, countStyle: .file)) read",
+                    detail: "已检查 \(scan.completedFiles.formatted()) / \(scan.totalFiles.formatted()) 项 • 已读取 \(ByteCountFormatter.string(fromByteCount: scan.processedBytes, countStyle: .file))",
                     currentItem: scan.currentFile
                 )
             } else if state.duplicateGroups.isEmpty {
                 ContentUnavailableView(
-                    "No duplicate scan results",
+                    "还没有重复文件扫描结果",
                     systemImage: "doc.on.doc",
-                    description: Text("Run a scan to find byte-for-byte duplicates anywhere inside Downloads.")
+                    description: Text("运行扫描，查找下载文件夹里字节完全相同的副本。")
                 )
             } else {
                 List(state.duplicateGroups) { group in
                     VStack(alignment: .leading, spacing: 10) {
                         HStack {
                             Label(
-                                "\(group.files.count) identical copies",
+                                "\(group.files.count) 个相同副本",
                                 systemImage: "doc.on.doc.fill"
                             )
                             .font(.headline)
                             Spacer()
-                            Text(ByteCountFormatter.string(fromByteCount: group.wastedSize, countStyle: .file) + " recoverable")
+                            Text("可回收 " + ByteCountFormatter.string(fromByteCount: group.wastedSize, countStyle: .file))
                                 .foregroundStyle(.secondary)
-                            Button("Move \(group.extras.count) Extras to Trash", role: .destructive) {
+                            Button("把 \(group.extras.count) 个多余副本移到废纸篓", role: .destructive) {
                                 pendingGroup = group
                             }
                         }
@@ -357,7 +357,7 @@ private struct DuplicateCenterView: View {
                                 .textSelection(.enabled)
                                 Spacer()
                                 if !isKeeper {
-                                    Button("Keep This One") {
+                                    Button("保留这个") {
                                         state.setDuplicateKeeper(url, in: group)
                                     }
                                     .buttonStyle(.link)
@@ -372,22 +372,22 @@ private struct DuplicateCenterView: View {
             }
         }
         .confirmationDialog(
-            "Move exact duplicate copies to Trash?",
+            "把完全相同的副本移到废纸篓？",
             isPresented: Binding(
                 get: { pendingGroup != nil },
                 set: { if !$0 { pendingGroup = nil } }
             ),
             presenting: pendingGroup
         ) { group in
-            Button("Move \(group.extras.count) Extras to Trash", role: .destructive) {
+            Button("把 \(group.extras.count) 个多余副本移到废纸篓", role: .destructive) {
                 Task {
                     await state.trashDuplicateExtras(in: group)
                     pendingGroup = nil
                 }
             }
-            Button("Cancel", role: .cancel) { pendingGroup = nil }
+            Button("取消", role: .cancel) { pendingGroup = nil }
         } message: { group in
-            Text("FileMorrow will keep \(group.keeper.path). Verify every path: nested project and app files may intentionally be identical. Confirmed SHA-256-identical extras move to recoverable macOS Trash.")
+            Text("FileMorrow 会保留 \(group.keeper.path)。请核对每一条路径：项目和应用程序里的嵌套文件可能本来就相同。已确认字节完全相同的多余副本会移到可恢复的 macOS 废纸篓。")
         }
     }
 }
@@ -401,7 +401,7 @@ private struct CleanupHeader: View {
     let summary: String?
     let isScanning: Bool
     let actionTitle: String
-    var cancelTitle: String = "Stop Check"
+    var cancelTitle: String = "停止检查"
     let isDisabled: Bool
     let onScan: () -> Void
     let onCancel: () -> Void
@@ -471,13 +471,13 @@ private struct CleanupSelectionFooter: View {
 
     var body: some View {
         HStack {
-            Button(selectedCount == totalCount ? "Deselect All" : "Select All", action: onToggleAll)
+            Button(selectedCount == totalCount ? "取消全选" : "全选", action: onToggleAll)
                 .buttonStyle(.link)
 
             Spacer()
 
             if selectedCount > 0 {
-                Text("\(selectedCount) selected • \(ByteCountFormatter.string(fromByteCount: selectedSize, countStyle: .file))")
+                Text("已选 \(selectedCount) 个 • \(ByteCountFormatter.string(fromByteCount: selectedSize, countStyle: .file))")
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
             }
@@ -508,13 +508,13 @@ private struct InstallerCenterView: View {
     var body: some View {
         VStack(spacing: 0) {
             CleanupHeader(
-                title: "Installers",
-                subtitle: "Finds .dmg and .pkg installers whose software is already on this Mac. Packages are checked against the install receipts macOS keeps; disk images are matched to the app in Applications. Nothing is mounted, opened, or run.",
+                title: "安装包",
+                subtitle: "查找软件已经装在这台 Mac 上的 .dmg 和 .pkg。安装包会对照 macOS 保存的安装回执；磁盘映像会匹配“应用程序”里的软件。不会挂载、打开或运行任何安装包。",
                 summary: state.redundantInstallers.isEmpty
                     ? nil
                     : "\(state.redundantInstallerCount) already used • \(ByteCountFormatter.string(fromByteCount: state.redundantInstallerReclaimableSize, countStyle: .file)) reclaimable",
                 isScanning: state.isScanningInstallers,
-                actionTitle: "Check Installers",
+                actionTitle: "检查安装包",
                 isDisabled: state.isWorking,
                 onScan: { state.startInstallerScan() },
                 onCancel: { state.cancelInstallerScan() }
@@ -523,19 +523,19 @@ private struct InstallerCenterView: View {
             content
         }
         .confirmationDialog(
-            "Move \(selected.count) used \(selected.count == 1 ? "installer" : "installers") to Trash?",
+            "把 \(selected.count) 个已用安装包移到废纸篓？",
             isPresented: $showConfirmation
         ) {
-            Button("Move to Trash", role: .destructive) {
+            Button("移到废纸篓", role: .destructive) {
                 let installers = selected
                 Task {
                     await state.trashInstallers(installers)
                     selection.removeAll()
                 }
             }
-            Button("Cancel", role: .cancel) { }
+            Button("取消", role: .cancel) { }
         } message: {
-            Text("The installed software is not touched. Only the installer files move to recoverable macOS Trash, and they can be downloaded again at any time. An installer newer than what is installed is never listed here.")
+            Text("已安装的软件不会被改动。只有安装包文件会移到可恢复的 macOS 废纸篓，而且随时可以重新下载。比本机版本更新的安装包不会出现在这里。")
         }
         .onChange(of: state.redundantInstallers) { _, installers in
             selection.formIntersection(Set(installers.map(\.id)))
@@ -547,18 +547,18 @@ private struct InstallerCenterView: View {
         if state.isScanningInstallers, let scan = state.installerScanProgress {
             CleanupProgressView(
                 fraction: scan.fraction,
-                headline: "Checking installers",
-                detail: "\(scan.completedInstallers.formatted()) of \(scan.totalInstallers.formatted()) installers",
+                headline: "正在检查安装包",
+                detail: "\(scan.completedInstallers.formatted()) / \(scan.totalInstallers.formatted()) 个安装包",
                 currentItem: scan.currentInstaller
             )
         } else if state.redundantInstallers.isEmpty {
             ContentUnavailableView(
-                state.hasScannedInstallers ? "No used installers" : "No installer check yet",
+                state.hasScannedInstallers ? "没有已用安装包" : "还没有检查安装包",
                 systemImage: "shippingbox",
                 description: Text(
                     state.hasScannedInstallers
-                        ? "Every installer in Downloads is either for software that is not installed, or newer than what is installed."
-                        : "Run a check to find .dmg and .pkg files for software you have already installed."
+                        ? "下载文件夹里的安装包，要么对应尚未安装的软件，要么比本机版本更新。"
+                        : "运行检查，查找你已经安装过的软件对应的 .dmg 和 .pkg。"
                 )
             )
         } else {
@@ -607,7 +607,7 @@ private struct InstallerCenterView: View {
                     selectedCount: selection.count,
                     totalCount: state.redundantInstallers.count,
                     selectedSize: selectedSize,
-                    actionTitle: "Move \(selection.count) to Trash",
+                    actionTitle: "把 \(selection.count) 个移到废纸篓",
                     isDisabled: selection.isEmpty || state.isWorking,
                     onToggleAll: {
                         selection = selection.count == state.redundantInstallers.count
@@ -637,13 +637,13 @@ private struct ExtractedArchiveCenterView: View {
     var body: some View {
         VStack(spacing: 0) {
             CleanupHeader(
-                title: "Extracted Archives",
-                subtitle: "Finds ZIP files whose contents are already unpacked next to them. Every entry must match the unpacked file byte-for-byte in size before an archive is listed here.",
+                title: "已解压压缩包",
+                subtitle: "查找内容已经解压在旁边的 ZIP。只有每个条目的大小都与解压文件完全一致时，才会出现在这里。",
                 summary: state.extractedArchives.isEmpty
                     ? nil
                     : "\(state.extractedArchiveCount) unpacked • \(ByteCountFormatter.string(fromByteCount: state.extractedArchiveReclaimableSize, countStyle: .file)) reclaimable",
                 isScanning: state.isScanningExtractedArchives,
-                actionTitle: "Check Archives",
+                actionTitle: "检查压缩包",
                 isDisabled: state.isWorking,
                 onScan: { state.startExtractedArchiveScan() },
                 onCancel: { state.cancelExtractedArchiveScan() }
@@ -652,19 +652,19 @@ private struct ExtractedArchiveCenterView: View {
             content
         }
         .confirmationDialog(
-            "Move \(selected.count) unpacked \(selected.count == 1 ? "archive" : "archives") to Trash?",
+            "把 \(selected.count) 个已解压压缩包移到废纸篓？",
             isPresented: $showConfirmation
         ) {
-            Button("Move to Trash", role: .destructive) {
+            Button("移到废纸篓", role: .destructive) {
                 let archives = selected
                 Task {
                     await state.trashExtractedArchives(archives)
                     selection.removeAll()
                 }
             }
-            Button("Cancel", role: .cancel) { }
+            Button("取消", role: .cancel) { }
         } message: {
-            Text("Only the .zip files move to recoverable macOS Trash. The unpacked folders stay exactly where they are, and every archive is re-verified against them one final time before it is moved.")
+            Text("只有 .zip 文件会移到可恢复的 macOS 废纸篓。解压后的文件夹原样保留，每个压缩包在移动前都会再核验一次。")
         }
         .onChange(of: state.extractedArchives) { _, archives in
             let ids = Set(archives.map(\.id))
@@ -677,18 +677,18 @@ private struct ExtractedArchiveCenterView: View {
         if state.isScanningExtractedArchives, let scan = state.extractedArchiveScanProgress {
             CleanupProgressView(
                 fraction: scan.fraction,
-                headline: "Verifying archive contents",
-                detail: "\(scan.completedArchives.formatted()) of \(scan.totalArchives.formatted()) archives",
+                headline: "正在核验压缩包内容",
+                detail: "\(scan.completedArchives.formatted()) / \(scan.totalArchives.formatted()) 个压缩包",
                 currentItem: scan.currentArchive
             )
         } else if state.extractedArchives.isEmpty {
             ContentUnavailableView(
-                state.hasScannedExtractedArchives ? "No unpacked archives" : "No archive check yet",
+                state.hasScannedExtractedArchives ? "没有已解压的压缩包" : "还没有检查压缩包",
                 systemImage: "archivebox",
                 description: Text(
                     state.hasScannedExtractedArchives
-                        ? "Every ZIP in Downloads is either still packed or does not fully match a folder next to it."
-                        : "Run a check to find ZIP files you already extracted and no longer need."
+                        ? "下载文件夹里的 ZIP 要么尚未解压，要么和旁边的文件夹不完全一致。"
+                        : "运行检查，查找你已经解压、不再需要的 ZIP。"
                 )
             )
         } else {
@@ -702,12 +702,12 @@ private struct ExtractedArchiveCenterView: View {
                             Text(archive.name)
                                 .fontWeight(.medium)
                             Label(
-                                "Unpacked to \(archive.destinationName)",
+                                "已解压到 \(archive.destinationName)",
                                 systemImage: "arrow.turn.down.right"
                             )
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                            Text("\(archive.entryCount.formatted()) files verified • \(ByteCountFormatter.string(fromByteCount: archive.extractedSize, countStyle: .file)) on disk")
+                            Text("已核验 \(archive.entryCount.formatted()) 个文件 • 磁盘占用 \(ByteCountFormatter.string(fromByteCount: archive.extractedSize, countStyle: .file))")
                                 .font(.caption2)
                                 .foregroundStyle(.tertiary)
                         }
@@ -727,7 +727,7 @@ private struct ExtractedArchiveCenterView: View {
                     selectedCount: selection.count,
                     totalCount: state.extractedArchives.count,
                     selectedSize: selectedSize,
-                    actionTitle: "Move \(selection.count) to Trash",
+                    actionTitle: "把 \(selection.count) 个移到废纸篓",
                     isDisabled: selection.isEmpty || state.isWorking,
                     onToggleAll: {
                         selection = selection.count == state.extractedArchives.count
@@ -747,17 +747,17 @@ private struct OrganizationPlanView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Label("Review before organizing", systemImage: "checklist")
+            Label("整理前请先确认", systemImage: "checklist")
                 .font(.title2.bold())
                 .foregroundStyle(.indigo)
 
             Text(proposal.automaticCheck
-                 ? "FileMorrow’s automatic check found files that are ready. Do you want to arrange your Downloads now?"
-                 : "Do you want to arrange these Downloads now?")
+                 ? "FileMorrow 的自动检查发现有文件可以整理。现在整理下载文件夹吗？"
+                 : "现在整理这些下载文件吗？")
                 .font(.title3.weight(.semibold))
 
             HStack {
-                Label("\(proposal.fileCount) files", systemImage: "doc.on.doc")
+                Label("\(proposal.fileCount) 个文件", systemImage: "doc.on.doc")
                 Spacer()
                 Text(ByteCountFormatter.string(fromByteCount: proposal.totalSize, countStyle: .file))
                     .foregroundStyle(.secondary)
@@ -775,19 +775,19 @@ private struct OrganizationPlanView: View {
             .frame(minHeight: 150)
 
             Label(
-                "Nothing is deleted. Only eligible loose files move, and Undo Last Organization can restore this entire batch.",
+                "不会删除任何文件。只有符合条件的零散文件会被移动，撤销上次整理可以还原这一整批。",
                 systemImage: "arrow.uturn.backward.circle.fill"
             )
             .foregroundStyle(.green)
             .fontWeight(.medium)
 
             HStack {
-                Button("Not Now", role: .cancel) {
+                Button("稍后再说", role: .cancel) {
                     state.organizationProposal = nil
-                    state.status = "Organization postponed • No files moved"
+                    state.status = "整理已推迟 • 没有移动文件"
                 }
                 Spacer()
-                Button("Organize \(proposal.fileCount) Files") {
+                Button("整理 \(proposal.fileCount) 个文件") {
                     Task { await state.organizeApproved() }
                 }
                 .buttonStyle(.borderedProminent)
@@ -807,9 +807,9 @@ private struct DashboardHeader: View {
         VStack(spacing: 16) {
             HStack {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("A calmer Downloads folder.")
+                    Text("更清爽的下载文件夹。")
                         .font(.title2.bold())
-                    Text("Fresh files stay visible. Older files wait for a confident, reversible decision.")
+                    Text("新文件保持可见。较旧的文件会等到有把握、可撤销的决定后再整理。")
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
@@ -821,10 +821,10 @@ private struct DashboardHeader: View {
             }
 
             HStack(spacing: 12) {
-                MetricCard(title: "Ready", value: state.readyFiles.count.formatted(), icon: "archivebox")
-                MetricCard(title: "Approved", value: state.approvedReadyFiles.count.formatted(), icon: "checkmark.seal", tint: .green)
-                MetricCard(title: "Awaiting analysis", value: state.awaitingAnalysisCount.formatted(), icon: "sparkles", tint: .indigo)
-                MetricCard(title: "Needs review", value: state.reviewCount.formatted(), icon: "exclamationmark.bubble", tint: .orange)
+                MetricCard(title: "可以归档", value: state.readyFiles.count.formatted(), icon: "archivebox")
+                MetricCard(title: "已确认", value: state.approvedReadyFiles.count.formatted(), icon: "checkmark.seal", tint: .green)
+                MetricCard(title: "等待分析", value: state.awaitingAnalysisCount.formatted(), icon: "sparkles", tint: .indigo)
+                MetricCard(title: "待审核", value: state.reviewCount.formatted(), icon: "exclamationmark.bubble", tint: .orange)
             }
         }
         .padding(20)
@@ -886,8 +886,8 @@ struct InspectorView: View {
                         Divider()
 
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("Suggested folder").font(.headline)
-                            Picker("Category", selection: Binding(
+                            Text("建议文件夹").font(.headline)
+                            Picker("分类", selection: Binding(
                                 get: { file.category },
                                 set: { category in Task { await state.correctSelected(to: category) } }
                             )) {
@@ -902,23 +902,23 @@ struct InspectorView: View {
                             ConfidenceView(value: file.confidence)
                             Text(file.reason)
                                 .foregroundStyle(.secondary)
-                            Label(file.source.rawValue, systemImage: file.source == .user ? "person.fill.checkmark" : "cpu")
+                            Label(file.source.title, systemImage: file.source == .user ? "person.fill.checkmark" : "cpu")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             if file.isOrganized {
-                                Label("Already organized", systemImage: "folder.fill.badge.checkmark")
+                                Label("已经整理", systemImage: "folder.fill.badge.checkmark")
                                     .font(.caption)
                                     .foregroundStyle(.green)
                             }
                         }
 
                         HStack {
-                            Button("Open File") {
+                            Button("打开文件") {
                                 NSWorkspace.shared.open(file.url)
                             }
                             .buttonStyle(.borderedProminent)
 
-                            Button("Teach Organizer…") {
+                            Button("教整理器…") {
                                 teachingFile = file
                             }
                             .buttonStyle(.bordered)
@@ -927,7 +927,7 @@ struct InspectorView: View {
                         if let excerpt = file.excerpt, !excerpt.isEmpty {
                             Divider()
                             VStack(alignment: .leading, spacing: 8) {
-                                Text("Evidence used").font(.headline)
+                                Text("使用的证据").font(.headline)
                                 Text(excerpt)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
@@ -936,7 +936,7 @@ struct InspectorView: View {
                             }
                         }
 
-                        Button("Reveal in Finder") {
+                        Button("在访达中显示") {
                             NSWorkspace.shared.activateFileViewerSelecting([file.url])
                         }
                     }
@@ -944,13 +944,13 @@ struct InspectorView: View {
                 }
             } else {
                 ContentUnavailableView(
-                    "Select a file",
+                    "选择一个文件",
                     systemImage: "sidebar.right",
-                    description: Text("Review the evidence, change its folder, or reveal it in Finder.")
+                    description: Text("查看证据、更改文件夹，或在访达中显示。")
                 )
             }
         }
-        .navigationTitle("Inspector")
+        .navigationTitle("详情")
         .sheet(item: $teachingFile) { file in
             TeachOrganizerSheet(state: state, file: file)
         }
@@ -1014,42 +1014,42 @@ private struct TeachOrganizerSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Teach the Organizer").font(.title2.bold())
+                Text("教整理器").font(.title2.bold())
                 Text(file.name)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
             }
 
             Form {
-                Picker("Correct category", selection: $category) {
+                Picker("正确分类", selection: $category) {
                     ForEach(availableCategories) { definition in
                         Label(definition.name, systemImage: definition.icon)
                             .tag(definition.category)
                     }
                 }
 
-                TextField("Reusable filename word or phrase", text: $filenameKeyword)
-                Text("Optional. For example: “operating systems”, “invoice”, or a course code. Matching future filenames will use this category.")
+                TextField("可复用的文件名词语", text: $filenameKeyword)
+                Text("可选。例如：“操作系统”、“发票”或课程代码。以后匹配的文件名会使用这个分类。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
                 if !fileExtension.isEmpty {
-                    Toggle("Always categorize .\(fileExtension) files this way", isOn: $rememberExtension)
-                    Text("Use this only when the format always belongs here. It will replace any previous category assignment for .\(fileExtension).")
+                    Toggle("以后都把 .\(fileExtension) 文件归到这里", isOn: $rememberExtension)
+                    Text("只有这种格式始终属于这里时再勾选。这会替换之前对 .\(fileExtension) 的分类规则。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
             .formStyle(.grouped)
 
-            Text("The current file is corrected immediately and added as an example for the on-device model. Optional rules also improve future files.")
+            Text("当前文件会立刻更正，并作为端侧模型的示例。可选规则也会帮助以后的文件。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
             HStack {
                 Spacer()
-                Button("Cancel", role: .cancel) { dismiss() }
-                Button("Save & Teach") {
+                Button("取消", role: .cancel) { dismiss() }
+                Button("保存并教学") {
                     Task {
                         await state.teach(
                             fileID: file.id,
@@ -1105,7 +1105,7 @@ private struct ConfidenceView: View {
                 .font(.callout.monospacedDigit())
                 .foregroundStyle(value >= 85 ? .primary : color)
         }
-        .accessibilityLabel("Confidence \(value) percent")
+        .accessibilityLabel("置信度 \(value)%")
     }
 }
 
@@ -1117,8 +1117,8 @@ struct SettingsView: View {
     var body: some View {
         TabView {
             Form {
-                Section("Classification") {
-                    Picker("Mode", selection: Binding(
+                Section("分类方式") {
+                    Picker("模式", selection: Binding(
                         get: { state.classificationMode },
                         set: { mode in Task { await state.setClassificationMode(mode) } }
                     )) {
@@ -1134,63 +1134,63 @@ struct SettingsView: View {
 
                     if state.classificationMode == .smartContent {
                         Label(
-                            "Apple Intelligence classifications are suggestions and may be inaccurate. Review important files before moving them.",
+                            "Apple Intelligence 的分类只是建议，可能不准确。移动重要文件前请先核对。",
                             systemImage: "exclamationmark.triangle.fill"
                         )
                         .foregroundStyle(.orange)
                     } else {
                         Label(
-                            "Recommended for predictable organization. No content analysis queue is needed.",
+                            "适合可预期的整理。不需要内容分析队列。",
                             systemImage: "checkmark.circle.fill"
                         )
                         .foregroundStyle(.green)
                     }
                 }
 
-                Section("Archive") {
-                    Toggle("Automatically organize eligible files hourly", isOn: Binding(
+                Section("归档") {
+                    Toggle("每小时自动整理符合条件的文件", isOn: Binding(
                         get: { state.automaticOrganization },
                         set: { state.setAutomaticOrganization($0) }
                     ))
-                    Toggle("Launch FileMorrow at login", isOn: Binding(
+                    Toggle("登录时打开 FileMorrow", isOn: Binding(
                         get: { state.launchAtLogin },
                         set: { state.setLaunchAtLogin($0) }
                     ))
-                    Stepper("Archive files after \(archiveDays) days", value: $archiveDays, in: 1...30)
+                    Stepper("\(archiveDays) 天后归档文件", value: $archiveDays, in: 1...30)
                     Slider(value: Binding(
                         get: { Double(minimumConfidence) },
                         set: { minimumConfidence = Int($0) }
                     ), in: 60...100, step: 5) {
-                        Text("Minimum confidence")
+                        Text("最低置信度")
                     }
-                    Text("Checks hourly while the menu-bar helper is running. Only files older than the selected age are moved; uncertain files stay for review.")
+                    Text("菜单栏助手运行时每小时检查一次。只有超过所选天数的文件会被移动；不确定的文件会留下来供你审核。")
                         .foregroundStyle(.secondary)
-                    Text("Current confidence threshold: \(minimumConfidence)%")
+                    Text("当前置信度阈值：\(minimumConfidence)%")
                         .foregroundStyle(.secondary)
                 }
 
-                Section("App") {
-                    Toggle("Keep FileMorrow in the Dock", isOn: Binding(
+                Section("应用") {
+                    Toggle("在程序坞中保留 FileMorrow", isOn: Binding(
                         get: { state.keepInDock },
                         set: { state.setKeepInDock($0) }
                     ))
-                    Text("Turn this off for a menu-bar-only experience. FileMorrow keeps running after its windows close.")
+                    Text("关闭后只保留菜单栏。窗口关闭后 FileMorrow 仍会继续运行。")
                         .foregroundStyle(.secondary)
                 }
 
-                Section("Help") {
-                    Button("Show Welcome Guide") {
+                Section("帮助") {
+                    Button("显示欢迎指南") {
                         state.requestOnboarding()
                     }
-                    Text("Reopen the first-launch explanation without changing your current settings.")
+                    Text("重新打开首次启动说明，不会更改你当前的设置。")
                         .foregroundStyle(.secondary)
                 }
             }
             .formStyle(.grouped)
-            .tabItem { Label("Organization", systemImage: "folder") }
+            .tabItem { Label("整理", systemImage: "folder") }
 
             CategorySettingsView(state: state)
-                .tabItem { Label("Categories", systemImage: "slider.horizontal.3") }
+                .tabItem { Label("分类", systemImage: "slider.horizontal.3") }
 
             Form {
                 Label {
@@ -1204,12 +1204,12 @@ struct SettingsView: View {
                     Image(systemName: state.intelligenceReady ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                         .foregroundStyle(state.intelligenceReady ? .green : .orange)
                 }
-                LabeledContent("Privacy", value: "Content stays on this Mac")
-                Text("FileMorrow extracts short local evidence and sends it only to Apple Intelligence running on your device.")
+                LabeledContent("隐私", value: "内容只会留在这台 Mac 上")
+                Text("FileMorrow 只提取简短的本地证据，并仅发送给这台设备上运行的 Apple Intelligence。")
                     .foregroundStyle(.secondary)
             }
             .formStyle(.grouped)
-            .tabItem { Label("Compatibility", systemImage: "checkmark.shield.fill") }
+            .tabItem { Label("兼容性", systemImage: "checkmark.shield.fill") }
         }
         .scenePadding()
         .frame(width: 680, height: 480)
@@ -1225,17 +1225,17 @@ private struct CategorySettingsView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(state.profile.name).font(.headline)
-                    Text("These definitions guide rules, local content scoring, and Apple Intelligence.")
+                    Text("这些定义会指导规则、本地内容评分和 Apple Intelligence。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button("Import…") { importProfile() }
-                Button("Export…") { exportProfile() }
+                Button("导入…") { importProfile() }
+                Button("导出…") { exportProfile() }
                 Button {
                     editingCategory = newCategory()
                 } label: {
-                    Label("Add", systemImage: "plus")
+                    Label("添加", systemImage: "plus")
                 }
                 .buttonStyle(.borderedProminent)
             }
@@ -1268,7 +1268,7 @@ private struct CategorySettingsView: View {
                         Text(definition.extensions.prefix(5).map { ".\($0)" }.joined(separator: " "))
                             .font(.caption.monospaced())
                             .foregroundStyle(.tertiary)
-                        Button("Edit") {
+                        Button("编辑") {
                             editingCategory = definition
                         }
                     }
@@ -1294,11 +1294,11 @@ private struct CategorySettingsView: View {
     private func newCategory() -> CategoryDefinition {
         .init(
             id: UUID().uuidString,
-            name: "New Category",
-            folderName: "New Category",
+            name: "新分类",
+            folderName: "新分类",
             icon: "folder.fill",
             color: "blue",
-            description: "Describe what belongs here.",
+            description: "说明哪些文件属于这里。",
             enabled: true,
             extensions: [],
             filenameKeywords: [],
@@ -1357,26 +1357,26 @@ private struct CategoryEditorView: View {
     var body: some View {
         VStack(spacing: 0) {
             Form {
-                Section("Identity") {
-                    TextField("Name", text: $draft.name)
-                    TextField("Destination folder", text: $draft.folderName)
-                    TextField("Description", text: $draft.description, axis: .vertical)
-                    TextField("SF Symbol", text: $draft.icon)
-                    Picker("Color", selection: $draft.color) {
+                Section("标识") {
+                    TextField("名称", text: $draft.name)
+                    TextField("目标文件夹", text: $draft.folderName)
+                    TextField("说明", text: $draft.description, axis: .vertical)
+                    TextField("SF 符号", text: $draft.icon)
+                    Picker("颜色", selection: $draft.color) {
                         ForEach(["indigo", "blue", "cyan", "teal", "mint", "green", "yellow", "orange", "red", "pink", "purple", "brown", "gray"], id: \.self) {
-                            Text($0.capitalized).tag($0)
+                            Text(colorLabel($0)).tag($0)
                         }
                     }
                 }
 
-                Section("Classification guide") {
-                    TextField("Extensions", text: $extensionsText, prompt: Text("pdf, docx, epub"))
-                    TextField("Filename keywords", text: $filenameKeywordsText, axis: .vertical)
-                    TextField("Content keywords", text: $contentKeywordsText, axis: .vertical)
-                    TextField("Examples", text: $examplesText, axis: .vertical)
-                    Toggle("Inspect content before final classification", isOn: $draft.contentAware)
+                Section("分类指南") {
+                    TextField("扩展名", text: $extensionsText, prompt: Text("pdf, docx, epub"))
+                    TextField("文件名关键词", text: $filenameKeywordsText, axis: .vertical)
+                    TextField("内容关键词", text: $contentKeywordsText, axis: .vertical)
+                    TextField("示例", text: $examplesText, axis: .vertical)
+                    Toggle("最终分类前先查看内容", isOn: $draft.contentAware)
                     Stepper(
-                        "Format confidence: \(draft.extensionConfidence)%",
+                        "格式置信度：\(draft.extensionConfidence)%",
                         value: $draft.extensionConfidence,
                         in: 0...100,
                         step: 5
@@ -1388,14 +1388,14 @@ private struct CategoryEditorView: View {
             Divider()
             HStack {
                 if canDelete {
-                    Button("Delete Category", role: .destructive) {
+                    Button("删除分类", role: .destructive) {
                         onDelete()
                         dismiss()
                     }
                 }
                 Spacer()
-                Button("Cancel") { dismiss() }
-                Button("Save") {
+                Button("取消") { dismiss() }
+                Button("保存") {
                     draft.name = draft.name.trimmingCharacters(in: .whitespacesAndNewlines)
                     draft.folderName = draft.folderName.trimmingCharacters(in: .whitespacesAndNewlines)
                     draft.extensions = parse(extensionsText).map {
@@ -1419,5 +1419,24 @@ private struct CategoryEditorView: View {
         value.split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
+    }
+
+    private func colorLabel(_ value: String) -> String {
+        switch value {
+        case "indigo": "靛蓝"
+        case "blue": "蓝色"
+        case "cyan": "青色"
+        case "teal": "青绿"
+        case "mint": "薄荷"
+        case "green": "绿色"
+        case "yellow": "黄色"
+        case "orange": "橙色"
+        case "red": "红色"
+        case "pink": "粉色"
+        case "purple": "紫色"
+        case "brown": "棕色"
+        case "gray": "灰色"
+        default: value
+        }
     }
 }

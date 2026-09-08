@@ -10,7 +10,7 @@ actor ContentExtractor {
 
     func extract(from url: URL, contentType: UTType?) async -> String {
         let ext = url.pathExtension.lowercased()
-        var pieces = ["Filename: \(url.lastPathComponent)"]
+        var pieces = ["文件名：\(url.lastPathComponent)"]
 
         if ext == "pdf", let pdf = PDFDocument(url: url) {
             for index in 0..<min(pdf.pageCount, 4) {
@@ -20,7 +20,7 @@ actor ContentExtractor {
         } else if ["docx", "pptx", "xlsx"].contains(ext) {
             pieces.append(contentsOf: officeText(from: url, extension: ext))
         } else if ["zip"].contains(ext) {
-            pieces.append("Archive entries:\n\(archiveListing(url))")
+            pieces.append("压缩包条目：\n\(archiveListing(url))")
         } else if contentType?.conforms(to: .image) == true {
             pieces.append(await imageText(url))
         } else if ["txt", "md", "csv", "json", "swift", "py", "js", "ts", "sql", "rtf"].contains(ext),

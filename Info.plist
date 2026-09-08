@@ -3,7 +3,11 @@
 <plist version="1.0">
 <dict>
     <key>CFBundleDevelopmentRegion</key>
-    <string>en</string>
+    <string>zh-Hans</string>
+    <key>CFBundleLocalizations</key>
+    <array>
+        <string>zh-Hans</string>
+    </array>
     <key>CFBundleDisplayName</key>
     <string>FileMorrow</string>
     <key>CFBundleExecutable</key>
@@ -23,9 +27,9 @@
     <key>CFBundleVersion</key>
     <string>20</string>
     <key>NSHumanReadableCopyright</key>
-    <string>Made by Nabeegh</string>
+    <string>由 Nabeegh 制作</string>
     <key>NSDownloadsFolderUsageDescription</key>
-    <string>FileMorrow needs access to Downloads to classify loose files, organize eligible items, detect duplicates, and undo moves.</string>
+    <string>FileMorrow 需要访问下载文件夹，以便分类零散文件、整理符合条件的项目、检测重复文件，以及撤销移动。</string>
     <key>LSMinimumSystemVersion</key>
     <string>14.0</string>
     <key>NSHighResolutionCapable</key>

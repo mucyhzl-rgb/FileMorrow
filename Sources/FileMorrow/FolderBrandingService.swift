@@ -5,14 +5,16 @@ import Foundation
 final class FolderBrandingService {
     func brandManagedFolders(downloadsURL: URL, profile: OrganizationProfile) {
         for definition in profile.enabledCategories where definition.category != .needsReview {
-            let folder = downloadsURL.appending(path: definition.folderName, directoryHint: .isDirectory)
-            guard AppSupportPaths.hasManagedMarker(in: folder) else { continue }
+            for folderName in definition.managedFolderNames {
+                let folder = downloadsURL.appending(path: folderName, directoryHint: .isDirectory)
+                guard AppSupportPaths.hasManagedMarker(in: folder) else { continue }
 
-            let image = folderIcon(
-                color: color(named: definition.color),
-                symbolName: definition.icon
-            )
-            NSWorkspace.shared.setIcon(image, forFile: folder.path)
+                let image = folderIcon(
+                    color: color(named: definition.color),
+                    symbolName: definition.icon
+                )
+                NSWorkspace.shared.setIcon(image, forFile: folder.path)
+            }
         }
     }
 

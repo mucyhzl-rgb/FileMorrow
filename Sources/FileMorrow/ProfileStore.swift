@@ -82,8 +82,49 @@ actor ProfileStore {
                 field: .examples,
                 suppressing: suppressed
             )
+            if isEnglishDisplay(result.categories[index].name, id: builtIn.id) {
+                result.categories[index].name = builtIn.name
+            }
+            if isEnglishDisplay(result.categories[index].folderName, id: builtIn.id) {
+                result.categories[index].folderName = builtIn.folderName
+            }
+            if result.categories[index].description == builtIn.id
+                || englishDescriptions[builtIn.id] == result.categories[index].description {
+                result.categories[index].description = builtIn.description
+            }
         }
         return result
+    }
+
+    /// Existing installs keep English names until this merge. Only rewrite
+    /// a field when the user has not customized it.
+    private func isEnglishDisplay(_ value: String, id: String) -> Bool {
+        value == id || value == CategoryDefinition.englishFolderAliases[id]
+    }
+
+    private var englishDescriptions: [String: String] {
+        [
+            "University": "Courses, lectures, assignments, research, exams, and academic material.",
+            "Finance & PSX": "Banking, investments, stock markets, taxes, statements, and company reports.",
+            "Medical": "Clinical, patient, hospital, health, lab, and medical professional material.",
+            "Work": "Client work, proposals, meetings, invoices, briefs, and deliverables.",
+            "Personal": "Personal applications, CVs, letters, and identity-related documents.",
+            "Travel & Immigration": "Flights, hotels, visas, passports, permits, and itineraries.",
+            "Legal": "Contracts, affidavits, ordinances, notices, and formal legal material.",
+            "Documents": "General documents, books, ebooks, notes, and subtitles without a stronger subject match.",
+            "Images": "Photos, screenshots, and raster images.",
+            "Videos": "Movies, screen recordings, and video clips.",
+            "Music": "Music, voice notes, podcasts, and audio recordings.",
+            "Apps & Installers": "Application installers and executable packages for any platform.",
+            "Archives": "Compressed archives whose contents do not indicate a stronger subject.",
+            "Design": "Design source files, vectors, layouts, mockups, and brand assets.",
+            "Code & Data": "Source code, websites, environments, databases, notebooks, and structured data.",
+            "Spreadsheets & Data": "Generic spreadsheets and tabular data without a stronger subject match.",
+            "System & Diagnostics": "Crash reports, logs, system profiles, diagnostic files, and configuration profiles.",
+            "Projects & Plugins": "Portable project bundles, creative coding projects, and application plugins.",
+            "Other": "Files with an unsupported or missing extension when using format-only organization.",
+            "Needs Review": "Fallback for files that remain genuinely ambiguous after analysis."
+        ]
     }
 
     private func merged(
@@ -169,15 +210,15 @@ actor ProfileStore {
 
     static let fallback = OrganizationProfile(
         schemaVersion: 2,
-        name: "Minimal",
+        name: "精简",
         categories: [
             .init(
                 id: ArchiveCategory.documents.rawValue,
-                name: "Documents",
-                folderName: "Documents",
+                name: "文档",
+                folderName: "文档",
                 icon: "doc.fill",
                 color: "gray",
-                description: "General documents",
+                description: "常规文档",
                 enabled: true,
                 extensions: ["pdf", "doc", "docx", "ppt", "pptx", "key", "txt"],
                 filenameKeywords: [],
@@ -188,11 +229,11 @@ actor ProfileStore {
             ),
             .init(
                 id: ArchiveCategory.other.rawValue,
-                name: "Other",
-                folderName: "Other",
+                name: "其他",
+                folderName: "其他",
                 icon: "square.grid.2x2.fill",
                 color: "gray",
-                description: "Unsupported or extensionless files",
+                description: "不支持或没有扩展名的文件",
                 enabled: true,
                 extensions: [],
                 filenameKeywords: [],
@@ -203,11 +244,11 @@ actor ProfileStore {
             ),
             .init(
                 id: ArchiveCategory.needsReview.rawValue,
-                name: "Needs Review",
-                folderName: "Needs Review",
+                name: "待审核",
+                folderName: "待审核",
                 icon: "questionmark.folder.fill",
                 color: "gray",
-                description: "Ambiguous files",
+                description: "无法确定归类的文件",
                 enabled: true,
                 extensions: [],
                 filenameKeywords: [],
@@ -224,6 +265,6 @@ enum ProfileError: LocalizedError {
     case invalidProfile
 
     var errorDescription: String? {
-        "The selected file is not a valid FileMorrow profile."
+        "所选文件不是有效的 FileMorrow 配置。"
     }
 }

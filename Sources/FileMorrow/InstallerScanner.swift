@@ -84,7 +84,7 @@ actor InstallerScanner {
                 installerSize: size,
                 installerVersion: receipt.packagedVersion ?? installerVersion,
                 installedName: receipt.identifier,
-                installedLocation: "Installed package receipt",
+                installedLocation: "已安装的软件包回执",
                 installedVersion: receipt.installedVersion,
                 evidence: .packageReceipt,
                 comparison: Self.comparison(

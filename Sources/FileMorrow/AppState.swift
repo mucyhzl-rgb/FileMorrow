@@ -12,7 +12,7 @@ final class AppState {
     var categoryFilter: ArchiveCategory?
     var selectedFileID: String?
     var query = ""
-    var status = "Ready"
+    var status = "就绪"
     var progress: Double?
     var isWorking = false
     var lastError: String?
@@ -146,7 +146,7 @@ final class AppState {
     func scan() async {
         isWorking = true
         progress = nil
-        status = "Scanning Downloads…"
+        status = "正在扫描下载文件夹…"
         defer { isWorking = false }
         let saved = await store.decisions()
         profile = await profileStore.load()
@@ -164,8 +164,8 @@ final class AppState {
             )
         }
         status = classificationMode == .formatOnly
-            ? "Scanned \(files.count.formatted()) files • Organized by format"
-            : "Scanned \(files.count.formatted()) files • Smart content mode"
+            ? "已扫描 \(files.count.formatted()) 个文件 • 按格式整理"
+            : "已扫描 \(files.count.formatted()) 个文件 • 智能内容模式"
         if selectedFileID != nil && selectedFile == nil { selectedFileID = nil }
     }
 
@@ -177,9 +177,9 @@ final class AppState {
 
         let removedCount = max(0, previousCount - files.count)
         if removedCount > 0 {
-            status = "Refreshed • Removed \(removedCount) deleted file\(removedCount == 1 ? "" : "s")"
+            status = "已刷新 • 移除了 \(removedCount) 个已删除文件"
         } else if previousSelection != nil, selectedFileID == nil {
-            status = "Refreshed • Cleared deleted file preview"
+            status = "已刷新 • 已清除被删除文件的预览"
         }
     }
 
@@ -187,8 +187,8 @@ final class AppState {
         automaticOrganization = enabled
         UserDefaults.standard.set(enabled, forKey: "automaticOrganization")
         status = enabled
-            ? "Automatic organization is on • Checks hourly"
-            : "Automatic organization is off"
+            ? "自动整理已开启 • 每小时检查一次"
+            : "自动整理已关闭"
         if enabled {
             Task { await runAutomaticOrganization() }
         }
@@ -207,21 +207,21 @@ final class AppState {
             launchAtLogin = SMAppService.mainApp.status == .enabled
             UserDefaults.standard.set(launchAtLogin, forKey: "launchAtLogin")
             lastError = error.localizedDescription
-            status = "Could not change Launch at Login"
+            status = "无法更改登录时打开"
         }
     }
 
     func setKeepInDock(_ enabled: Bool) {
         guard DockVisibility.apply(keepInDock: enabled) else {
-            lastError = "macOS could not change the Dock visibility."
-            status = "Could not change Dock visibility"
+            lastError = "macOS 无法更改程序坞显示。"
+            status = "无法更改程序坞显示"
             return
         }
         keepInDock = enabled
         UserDefaults.standard.set(enabled, forKey: "keepInDock")
         status = enabled
-            ? "FileMorrow will stay in the Dock"
-            : "FileMorrow is running from the menu bar"
+            ? "FileMorrow 将保留在程序坞中"
+            : "FileMorrow 正在菜单栏中运行"
         if enabled {
             NSApplication.shared.activate()
         }
@@ -240,14 +240,14 @@ final class AppState {
 
         guard !approvedReadyFiles.isEmpty else {
             status = reviewCount == 0
-                ? "Automatic check complete • Nothing is older than \(archiveDays) days"
-                : "Automatic check complete • \(reviewCount) uncertain files need review"
+                ? "自动检查完成 • 没有超过 \(archiveDays) 天的文件"
+                : "自动检查完成 • \(reviewCount) 个不确定的文件需要审核"
             return
         }
 
         let count = approvedReadyFiles.count
         await organizeApproved()
-        status = "Automatically organized \(count) files • Undo Last Organization is available"
+        status = "已自动整理 \(count) 个文件 • 可以撤销上次整理"
     }
 
     func checkAndPrepareOrganization() async {
@@ -270,19 +270,19 @@ final class AppState {
         await setClassificationMode(mode)
         setLaunchAtLogin(launchEnabled)
         status = enabled
-            ? "Setup complete • Automatic organization runs hourly"
-            : "Setup complete • Automatic organization is off"
+            ? "设置完成 • 自动整理每小时运行一次"
+            : "设置完成 • 自动整理已关闭"
         if enabled { await runAutomaticOrganization() }
     }
 
     func analyzeReady(limit: Int? = nil) async {
         guard !isWorking else { return }
         guard classificationMode == .smartContent else {
-            status = "Switch to Smart Content in Settings to use Apple Intelligence"
+            status = "请在设置中切换到智能内容，才能使用 Apple Intelligence"
             return
         }
         guard intelligenceReady else {
-            status = "Apple Intelligence is not available on this Mac"
+            status = "这台 Mac 上无法使用 Apple Intelligence"
             lastError = intelligenceStatusDetail
             return
         }
@@ -293,7 +293,7 @@ final class AppState {
         let candidates = files.filter(needsAnalysis).map(\.id)
         let selected = limit.map { Array(candidates.prefix($0)) } ?? candidates
         guard !selected.isEmpty else {
-            status = "Nothing needs AI analysis"
+            status = "没有需要 AI 分析的文件"
             return
         }
 
@@ -312,7 +312,7 @@ final class AppState {
         for id in selected {
             guard !Task.isCancelled, !shouldCancelAnalysis else { break }
             guard let record = files.first(where: { $0.id == id }) else { continue }
-            status = "Reading \(record.name)…"
+            status = "正在读取 \(record.name)…"
             let type = UTType(record.contentType)
             let excerpt = await extractor.extract(from: record.url, contentType: type)
 
@@ -331,7 +331,7 @@ final class AppState {
             }
 
             do {
-                status = "Apple Intelligence • \(completed + 1) of \(selected.count)"
+                status = "Apple Intelligence • \(completed + 1)/\(selected.count)"
                 let (result, definition) = try await ai.classify(
                     filename: record.name,
                     excerpt: excerpt,
@@ -342,7 +342,7 @@ final class AppState {
                     if category == .needsReview, record.category != .needsReview {
                         file.category = record.category
                         file.confidence = max(record.confidence, self.minimumConfidence)
-                        file.reason = "Known \(self.definition(for: record.category).name) format; no stronger subject was found"
+                        file.reason = "已知的「\(self.definition(for: record.category).name)」格式，没有找到更明确的主题"
                         file.source = .formatFallback
                     } else {
                         file.category = category
@@ -369,8 +369,8 @@ final class AppState {
             try? await store.save(contentsOf: pendingDecisions)
         }
         status = shouldCancelAnalysis
-            ? "Stopped after \(completed) files • Decisions saved"
-            : "Analyzed \(completed) files • No files moved"
+            ? "已在 \(completed) 个文件后停止 • 判断结果已保存"
+            : "已分析 \(completed) 个文件 • 没有移动文件"
     }
 
     /// Owns the analysis task so other workflows can wait for it to finish
@@ -382,7 +382,7 @@ final class AppState {
 
     func cancelAnalysis() {
         shouldCancelAnalysis = true
-        status = "Stopping after the current file…"
+        status = "将在当前文件完成后停止…"
     }
 
     private func needsAnalysis(_ record: FileRecord) -> Bool {
@@ -416,7 +416,7 @@ final class AppState {
         isWorking = true
         isScanningDuplicates = true
         duplicateScanProgress = nil
-        status = "Finding exact duplicates…"
+        status = "正在查找完全相同的重复文件…"
         let result = await duplicateScanner.scan(root: downloadsURL) { [weak self] update in
             await MainActor.run {
                 self?.duplicateScanProgress = update
@@ -432,29 +432,29 @@ final class AppState {
         progress = nil
         duplicateScanProgress = nil
         status = Task.isCancelled
-            ? "Duplicate scan stopped"
+            ? "重复文件扫描已停止"
             : duplicateGroups.isEmpty
-                ? "No exact duplicates found"
-                : "Found \(duplicateExtraCount) potential duplicate copies to review"
+                ? "没有找到完全相同的重复文件"
+                : "找到 \(duplicateExtraCount) 个待审核的重复副本"
     }
 
     func cancelDuplicateScan() {
         duplicateScanTask?.cancel()
-        status = "Stopping duplicate scan…"
+        status = "正在停止重复文件扫描…"
     }
 
     func trashDuplicateExtras(in group: DuplicateGroup) async {
         guard !isWorking else { return }
         isWorking = true
-        status = "Moving duplicate copies to Trash…"
+        status = "正在把重复副本移到废纸篓…"
         do {
             let count = try await duplicateScanner.trashExtras(in: group)
-            status = "Moved \(count) exact duplicate \(count == 1 ? "copy" : "copies") to Trash"
+            status = "已将 \(count) 个完全相同的副本移到废纸篓"
             duplicateGroups = await duplicateScanner.scan(root: downloadsURL)
             await scan()
         } catch {
             lastError = error.localizedDescription
-            status = "Duplicate cleanup needs attention"
+            status = "重复文件清理需要注意"
         }
         isWorking = false
     }
@@ -470,7 +470,7 @@ final class AppState {
         isWorking = true
         isScanningExtractedArchives = true
         extractedArchiveScanProgress = nil
-        status = "Checking which archives are already unpacked…"
+        status = "正在检查哪些压缩包已经解压…"
         let result = await archiveScanner.scan(
             root: downloadsURL,
             profile: profile
@@ -478,8 +478,8 @@ final class AppState {
             await MainActor.run {
                 self?.extractedArchiveScanProgress = update
                 self?.progress = update.fraction
-                self?.status = update.currentArchive.map { "Checking \($0)…" }
-                    ?? "Checking archives…"
+                self?.status = update.currentArchive.map { "正在检查 \($0)…" }
+                    ?? "正在检查压缩包…"
             }
         }
         if !Task.isCancelled {
@@ -491,21 +491,21 @@ final class AppState {
         progress = nil
         extractedArchiveScanProgress = nil
         status = Task.isCancelled
-            ? "Archive check stopped"
+            ? "压缩包检查已停止"
             : extractedArchives.isEmpty
-                ? "No archives are fully unpacked yet"
-                : "\(extractedArchiveCount) unpacked archives • \(ByteCountFormatter.string(fromByteCount: extractedArchiveReclaimableSize, countStyle: .file)) reclaimable"
+                ? "还没有完全解压的压缩包"
+                : "\(extractedArchiveCount) 个已解压压缩包 • 可回收 \(ByteCountFormatter.string(fromByteCount: extractedArchiveReclaimableSize, countStyle: .file))"
     }
 
     func cancelExtractedArchiveScan() {
         archiveScanTask?.cancel()
-        status = "Stopping archive check…"
+        status = "正在停止压缩包检查…"
     }
 
     func trashExtractedArchives(_ archives: [ExtractedArchive]) async {
         guard !isWorking, !archives.isEmpty else { return }
         isWorking = true
-        status = "Moving unpacked archives to Trash…"
+        status = "正在把已解压的压缩包移到废纸篓…"
         defer { isWorking = false }
 
         var reclaimed: Int64 = 0
@@ -528,8 +528,8 @@ final class AppState {
         extractedArchives.removeAll { resolved.contains($0.id) }
         lastError = firstFailure
         status = trashed == 0
-            ? "No archives were moved to Trash"
-            : "Moved \(trashed) unpacked \(trashed == 1 ? "archive" : "archives") to Trash • \(ByteCountFormatter.string(fromByteCount: reclaimed, countStyle: .file)) reclaimed"
+            ? "没有压缩包被移到废纸篓"
+            : "已将 \(trashed) 个已解压压缩包移到废纸篓 • 回收了 \(ByteCountFormatter.string(fromByteCount: reclaimed, countStyle: .file))"
         await scan()
     }
 
@@ -544,13 +544,13 @@ final class AppState {
         isWorking = true
         isScanningInstallers = true
         installerScanProgress = nil
-        status = "Checking which installers you have already used…"
+        status = "正在检查哪些安装包已经用过…"
         let result = await installerScanner.scan(root: downloadsURL, profile: profile) { [weak self] update in
             await MainActor.run {
                 self?.installerScanProgress = update
                 self?.progress = update.fraction
-                self?.status = update.currentInstaller.map { "Checking \($0)…" }
-                    ?? "Checking installers…"
+                self?.status = update.currentInstaller.map { "正在检查 \($0)…" }
+                    ?? "正在检查安装包…"
             }
         }
         if !Task.isCancelled {
@@ -562,21 +562,21 @@ final class AppState {
         progress = nil
         installerScanProgress = nil
         status = Task.isCancelled
-            ? "Installer check stopped"
+            ? "安装包检查已停止"
             : redundantInstallers.isEmpty
-                ? "No installers match software already on this Mac"
-                : "\(redundantInstallerCount) used installers • \(ByteCountFormatter.string(fromByteCount: redundantInstallerReclaimableSize, countStyle: .file)) reclaimable"
+                ? "没有安装包对应本机已安装的软件"
+                : "\(redundantInstallerCount) 个已用安装包 • 可回收 \(ByteCountFormatter.string(fromByteCount: redundantInstallerReclaimableSize, countStyle: .file))"
     }
 
     func cancelInstallerScan() {
         installerScanTask?.cancel()
-        status = "Stopping installer check…"
+        status = "正在停止安装包检查…"
     }
 
     func trashInstallers(_ installers: [RedundantInstaller]) async {
         guard !isWorking, !installers.isEmpty else { return }
         isWorking = true
-        status = "Moving used installers to Trash…"
+        status = "正在把已用安装包移到废纸篓…"
         defer { isWorking = false }
 
         var reclaimed: Int64 = 0
@@ -597,8 +597,8 @@ final class AppState {
         redundantInstallers.removeAll { resolved.contains($0.id) }
         lastError = firstFailure
         status = trashed == 0
-            ? "No installers were moved to Trash"
-            : "Moved \(trashed) used \(trashed == 1 ? "installer" : "installers") to Trash • \(ByteCountFormatter.string(fromByteCount: reclaimed, countStyle: .file)) reclaimed"
+            ? "没有安装包被移到废纸篓"
+            : "已将 \(trashed) 个已用安装包移到废纸篓 • 回收了 \(ByteCountFormatter.string(fromByteCount: reclaimed, countStyle: .file))"
         await scan()
     }
 
@@ -625,10 +625,10 @@ final class AppState {
         guard let id = selectedFileID, let index = files.firstIndex(where: { $0.id == id }) else { return }
         files[index].category = category
         files[index].confidence = 100
-        files[index].reason = "Confirmed by you"
+        files[index].reason = "已由你确认"
         files[index].source = .user
         try? await saveDecision(for: files[index])
-        status = "Saved your correction"
+        status = "已保存你的更正"
     }
 
     func teach(
@@ -668,17 +668,17 @@ final class AppState {
 
         files[fileIndex].category = category
         files[fileIndex].confidence = 100
-        files[fileIndex].reason = "Confirmed by you and added to the organization profile"
+        files[fileIndex].reason = "已由你确认，并加入整理配置"
         files[fileIndex].source = .user
         do {
             try await profileStore.save(profile)
             try await saveDecision(for: files[fileIndex])
             status = rememberExtension || !keyword.isEmpty
-                ? "Correction saved • Future matching files will use it"
-                : "Correction saved • Example added for Apple Intelligence"
+                ? "更正已保存 • 以后匹配的文件会沿用"
+                : "更正已保存 • 已为 Apple Intelligence 添加示例"
         } catch {
             lastError = error.localizedDescription
-            status = "Could not save teaching rule"
+            status = "无法保存教学规则"
         }
     }
 
@@ -709,28 +709,28 @@ final class AppState {
     func importProfile(from url: URL) async {
         do {
             profile = try await profileStore.importProfile(from: url)
-            status = "Imported \(profile.name) profile"
+            status = "已导入「\(profile.name)」配置"
             await scan()
         } catch {
             lastError = error.localizedDescription
-            status = "Profile import failed"
+            status = "配置导入失败"
         }
     }
 
     func exportProfile(to url: URL) async {
         do {
             try await profileStore.export(profile, to: url)
-            status = "Exported organization profile"
+            status = "已导出整理配置"
         } catch {
             lastError = error.localizedDescription
-            status = "Profile export failed"
+            status = "配置导出失败"
         }
     }
 
     func prepareOrganizationProposal(automaticCheck: Bool = false) {
         let candidates = approvedReadyFiles
         guard !candidates.isEmpty else {
-            status = "Nothing is ready to organize"
+            status = "还没有可以整理的文件"
             return
         }
         let grouped = Dictionary(grouping: candidates) { definition(for: $0.category).name }
@@ -741,14 +741,14 @@ final class AppState {
             automaticCheck: automaticCheck
         )
         status = automaticCheck
-            ? "Automatic check found \(candidates.count) files • Waiting for your approval"
-            : "Review the organization plan"
+            ? "自动检查找到 \(candidates.count) 个文件 • 等待你确认"
+            : "请查看整理计划"
     }
 
     func organizeApproved() async {
         guard !isWorking else { return }
         isWorking = true
-        status = "Organizing approved files…"
+        status = "正在整理已确认的文件…"
         defer { isWorking = false }
         do {
             let count = try await organizer.organize(
@@ -759,27 +759,27 @@ final class AppState {
             )
             lastOrganizedCount = count
             organizationProposal = nil
-            status = "Organized \(count) files • Undo Last Organization is available"
+            status = "已整理 \(count) 个文件 • 可以撤销上次整理"
             await scan()
         } catch {
             lastError = error.localizedDescription
-            status = "Organization stopped safely"
+            status = "整理已安全停止"
         }
     }
 
     func undoLastMove() async {
         guard !isWorking else { return }
         isWorking = true
-        status = "Undoing last organization…"
+        status = "正在撤销上次整理…"
         defer { isWorking = false }
         do {
             let count = try await organizer.undoLast()
             if count > 0 { lastOrganizedCount = 0 }
-            status = count == 0 ? "Nothing to undo" : "Restored \(count) files"
+            status = count == 0 ? "没有可撤销的操作" : "已还原 \(count) 个文件"
             await scan()
         } catch {
             lastError = error.localizedDescription
-            status = "Undo needs attention"
+            status = "撤销需要注意"
         }
     }
 
@@ -839,8 +839,8 @@ final class AppState {
         let wordCount = cleaned.split(separator: " ").count
         guard !cleaned.isEmpty, !hasWeakPhrase, !hasFormattingJunk, (3...18).contains(wordCount) else {
             return category == .needsReview
-                ? "Content is too ambiguous for safe automatic organization"
-                : "Content and filename match \(definition(for: category).name)"
+                ? "内容不够明确，不宜自动整理"
+                : "内容和文件名符合「\(definition(for: category).name)」"
         }
         return String(cleaned.prefix(140))
     }
@@ -848,11 +848,11 @@ final class AppState {
     private func persistProfileAndRescan() async {
         do {
             try await profileStore.save(profile)
-            status = "Saved profile changes"
+            status = "已保存配置更改"
             await scan()
         } catch {
             lastError = error.localizedDescription
-            status = "Could not save profile"
+            status = "无法保存配置"
         }
     }
 

@@ -80,6 +80,121 @@ final class ProfileStoreTests: XCTestCase {
         )
     }
 
+    func testEnglishBuiltInDisplayNamesAreLocalizedOnReload() async throws {
+        let english = OrganizationProfile(
+            schemaVersion: 2,
+            name: "General Downloads",
+            categories: [
+                .init(
+                    id: "Documents",
+                    name: "Documents & Books",
+                    folderName: "Documents & Books",
+                    icon: "doc.fill",
+                    color: "gray",
+                    description: "General documents, books, ebooks, notes, and subtitles without a stronger subject match.",
+                    enabled: true,
+                    extensions: ["pdf"],
+                    filenameKeywords: [],
+                    contentKeywords: [],
+                    examples: [],
+                    contentAware: true,
+                    extensionConfidence: 60
+                ),
+                Harness.category(id: "Needs Review")
+            ]
+        )
+        let chinese = OrganizationProfile(
+            schemaVersion: 2,
+            name: "通用下载",
+            categories: [
+                .init(
+                    id: "Documents",
+                    name: "文档与书籍",
+                    folderName: "文档与书籍",
+                    icon: "doc.fill",
+                    color: "gray",
+                    description: "没有更明确主题匹配的常规文档、书籍、电子书、笔记和字幕。",
+                    enabled: true,
+                    extensions: ["pdf"],
+                    filenameKeywords: [],
+                    contentKeywords: [],
+                    examples: [],
+                    contentAware: true,
+                    extensionConfidence: 60
+                ),
+                Harness.category(id: "Needs Review")
+            ]
+        )
+        let harness = try Harness(bundled: english)
+        defer { harness.cleanUp() }
+
+        _ = await harness.store.load()
+        _ = try Harness.writeBundled(chinese, at: harness.bundledURL)
+
+        let reloaded = await Harness.freshStore(harness).load()
+        let documents = try XCTUnwrap(reloaded.categories.first { $0.id == "Documents" })
+        XCTAssertEqual(documents.name, "文档与书籍")
+        XCTAssertEqual(documents.folderName, "文档与书籍")
+        XCTAssertTrue(documents.description.contains("文档"))
+    }
+
+    func testCustomCategoryNamesSurviveChineseMigration() async throws {
+        let english = OrganizationProfile(
+            schemaVersion: 2,
+            name: "General Downloads",
+            categories: [
+                .init(
+                    id: "Work",
+                    name: "Client Projects",
+                    folderName: "Work",
+                    icon: "briefcase.fill",
+                    color: "blue",
+                    description: "Client work, proposals, meetings, invoices, briefs, and deliverables.",
+                    enabled: true,
+                    extensions: [],
+                    filenameKeywords: [],
+                    contentKeywords: [],
+                    examples: [],
+                    contentAware: true,
+                    extensionConfidence: 0
+                ),
+                Harness.category(id: "Needs Review")
+            ]
+        )
+        let chinese = OrganizationProfile(
+            schemaVersion: 2,
+            name: "通用下载",
+            categories: [
+                .init(
+                    id: "Work",
+                    name: "工作",
+                    folderName: "工作",
+                    icon: "briefcase.fill",
+                    color: "blue",
+                    description: "客户工作、方案、会议、发票、简报和交付物。",
+                    enabled: true,
+                    extensions: [],
+                    filenameKeywords: [],
+                    contentKeywords: [],
+                    examples: [],
+                    contentAware: true,
+                    extensionConfidence: 0
+                ),
+                Harness.category(id: "Needs Review")
+            ]
+        )
+        let harness = try Harness(bundled: english)
+        defer { harness.cleanUp() }
+
+        _ = await harness.store.load()
+        _ = try Harness.writeBundled(chinese, at: harness.bundledURL)
+
+        let reloaded = await Harness.freshStore(harness).load()
+        let work = try XCTUnwrap(reloaded.categories.first { $0.id == "Work" })
+        XCTAssertEqual(work.name, "Client Projects")
+        XCTAssertEqual(work.folderName, "工作")
+    }
+
     func testUntouchedProfileStillLearnsNewBuiltInKnowledge() async throws {
         let harness = try Harness(bundled: Harness.profile(extensions: ["pdf"]))
         defer { harness.cleanUp() }

@@ -216,7 +216,7 @@ enum ExtractedArchiveError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case let .contentsNoLongerMatch(name):
-            "\(name) was left in place: its extracted files no longer match the archive."
+            "已跳过 \(name)：解压后的文件已与压缩包不一致。"
         }
     }
 }

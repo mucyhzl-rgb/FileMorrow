@@ -10,8 +10,10 @@ enum DownloadsFolders {
     static func managedScanRoots(root: URL, profile: OrganizationProfile) -> [URL] {
         var folders = [root]
         for definition in profile.enabledCategories where definition.category != .needsReview {
-            let folder = root.appending(path: definition.folderName, directoryHint: .isDirectory)
-            if AppSupportPaths.hasManagedMarker(in: folder) { folders.append(folder) }
+            for folderName in definition.managedFolderNames {
+                let folder = root.appending(path: folderName, directoryHint: .isDirectory)
+                if AppSupportPaths.hasManagedMarker(in: folder) { folders.append(folder) }
+            }
         }
         return folders
     }

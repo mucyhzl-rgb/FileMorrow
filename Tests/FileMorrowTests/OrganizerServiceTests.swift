@@ -9,9 +9,10 @@ final class OrganizerServiceTests: XCTestCase {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
 
+        let imagesName = TestProfiles.general.definition(for: .images)!.folderName
         let source = root.appending(path: "photo.jpg")
         try Data("new".utf8).write(to: source)
-        let images = root.appending(path: "Images", directoryHint: .isDirectory)
+        let images = root.appending(path: imagesName, directoryHint: .isDirectory)
         try FileManager.default.createDirectory(at: images, withIntermediateDirectories: true)
         try Data("existing".utf8).write(to: images.appending(path: "photo.jpg"))
 
@@ -41,9 +42,11 @@ final class OrganizerServiceTests: XCTestCase {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
 
+        let imagesName = TestProfiles.general.definition(for: .images)!.folderName
+        let documentsName = TestProfiles.general.definition(for: .documents)!.folderName
         // A plain file where the Images folder needs to go, so creating that
         // destination fails for the first record only.
-        try Data("blocker".utf8).write(to: root.appending(path: "Images"))
+        try Data("blocker".utf8).write(to: root.appending(path: imagesName))
 
         let blocked = root.appending(path: "photo.jpg")
         let movable = root.appending(path: "notes.pdf")
@@ -63,7 +66,7 @@ final class OrganizerServiceTests: XCTestCase {
         XCTAssertEqual(skipped, 1)
         XCTAssertTrue(FileManager.default.fileExists(atPath: blocked.path), "The failed file stays put")
         XCTAssertTrue(FileManager.default.fileExists(
-            atPath: root.appending(path: "Documents & Books/notes.pdf").path
+            atPath: root.appending(path: "\(documentsName)/notes.pdf").path
         ))
 
         let undone = try await organizer.undoLast()
@@ -76,7 +79,8 @@ final class OrganizerServiceTests: XCTestCase {
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
 
-        try Data("blocker".utf8).write(to: root.appending(path: "Images"))
+        let imagesName = TestProfiles.general.definition(for: .images)!.folderName
+        try Data("blocker".utf8).write(to: root.appending(path: imagesName))
         let blocked = root.appending(path: "photo.jpg")
         try Data("jpg".utf8).write(to: blocked)
 

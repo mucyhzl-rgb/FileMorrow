@@ -234,9 +234,9 @@ enum DuplicateCleanupError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case let .keeperMissing(name):
-            "Nothing was deleted: the copy FileMorrow planned to keep (\(name)) is no longer there."
+            "没有删除任何文件：FileMorrow 打算保留的副本（\(name））已经不在了。"
         case let .contentsChanged(name):
-            "Nothing further was deleted: \(name) changed since the scan and is no longer an exact duplicate."
+            "没有继续删除：\(name) 自扫描后已变化，不再是完全相同的副本。"
         }
     }
 }

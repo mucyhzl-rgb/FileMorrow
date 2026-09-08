@@ -39,11 +39,11 @@ struct OnboardingView: View {
 
             HStack {
                 VStack(alignment: .leading, spacing: 6) {
-                    Toggle("Organize automatically after seven days", isOn: $automaticOrganization)
-                    Toggle("Launch FileMorrow at login", isOn: $launchAtLogin)
+                    Toggle("七天后自动整理", isOn: $automaticOrganization)
+                    Toggle("登录时打开 FileMorrow", isOn: $launchAtLogin)
                 }
                 Spacer()
-                Button("Start FileMorrow") {
+                Button("开始使用 FileMorrow") {
                     onComplete(mode, automaticOrganization, launchAtLogin)
                 }
                 .keyboardShortcut(.defaultAction)
@@ -65,9 +65,9 @@ struct OnboardingView: View {
                 .background(.indigo.gradient, in: RoundedRectangle(cornerRadius: 20))
 
             VStack(alignment: .leading, spacing: 5) {
-                Text("Welcome to FileMorrow")
+                Text("欢迎使用 FileMorrow")
                     .font(.largeTitle.bold())
-                Text("A calm, private Downloads organizer.")
+                Text("安静、私密的下载文件夹整理工具。")
                     .font(.title3)
                     .foregroundStyle(.secondary)
             }
@@ -76,23 +76,23 @@ struct OnboardingView: View {
 
     private var rules: some View {
         OnboardingSection(
-            title: "Files get a seven-day head start",
+            title: "文件先有七天缓冲期",
             icon: "calendar.badge.clock",
             tint: .indigo
         ) {
-            Text("Today, Yesterday, and the Last 7 Days remain untouched and easy to find. Only older loose files become eligible for organization.")
-            Text("Folders are a hard boundary: FileMorrow never moves a downloaded folder or anything inside it.")
+            Text("今天、昨天和最近 7 天的文件不会被移动，方便查找。只有更早的零散文件才会进入整理。")
+            Text("文件夹是硬边界：FileMorrow 绝不会移动下载来的文件夹，也不会动里面的任何内容。")
                 .fontWeight(.medium)
         }
     }
 
     private var modePicker: some View {
         OnboardingSection(
-            title: "Choose how files are classified",
+            title: "选择文件分类方式",
             icon: "switch.2",
             tint: .cyan
         ) {
-            Picker("Classification mode", selection: $mode) {
+            Picker("分类模式", selection: $mode) {
                 ForEach(ClassificationMode.allCases) { option in
                     Text(option.title).tag(option)
                 }
@@ -103,7 +103,7 @@ struct OnboardingView: View {
                 .foregroundStyle(.secondary)
 
             if mode == .smartContent {
-                Text("Smart Content is optional and can make mistakes. High-confidence local evidence is used first; uncertain files stay visible for review.")
+                Text("智能内容是可选的，也可能分错。会先使用高置信度的本地证据；不确定的文件会留下来供你审核。")
                     .foregroundStyle(.orange)
             }
         }
@@ -111,14 +111,14 @@ struct OnboardingView: View {
 
     private var safety: some View {
         OnboardingSection(
-            title: "Every cleanup has a safety net",
+            title: "每次清理都有安全网",
             icon: "arrow.uturn.backward.circle.fill",
             tint: .green
         ) {
-            Text("Manual organization shows a plan before moving. If you enable automatic organization here, FileMorrow can move eligible files during hourly checks without asking again.")
+            Text("手动整理会先显示计划再移动。如果在这里开启自动整理，FileMorrow 可以在每小时检查时移动符合条件的文件，而不再询问。")
                 .fontWeight(.medium)
-            Text("Every organized batch has a visible Undo Last Organization action.")
-            Text("Duplicate detection compares SHA-256 hashes, keeps one copy, and sends only selected extras to Trash so they remain recoverable.")
+            Text("每一批整理都有可见的“撤销上次整理”操作。")
+            Text("重复文件检测比较 SHA-256 哈希，保留一份副本，只把你选中的多余文件移到废纸篓，因此可以恢复。")
         }
     }
 
@@ -129,7 +129,7 @@ struct OnboardingView: View {
             tint: availability.isReady ? .green : .orange
         ) {
             Text(availability.detail)
-            Text("Format mode never requires Apple Intelligence.")
+            Text("格式模式从不需要 Apple Intelligence。")
                 .fontWeight(.medium)
         }
     }
