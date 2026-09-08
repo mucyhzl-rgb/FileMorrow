@@ -6,6 +6,18 @@ build_dir="$project_dir/.build/release"
 output_dir="$project_dir/dist"
 app_dir="$output_dir/FileMorrow.app"
 
+# Command Line Tools ship SwiftUI headers but not SwiftUIMacros /
+# FoundationModelsMacros. @State and @Generable then fail. Prefer full Xcode.
+if [[ -d /Applications/Xcode.app/Contents/Developer ]]; then
+  export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+elif ! xcrun --find swift >/dev/null 2>&1 || [[ "$(xcode-select -p)" == *CommandLineTools* ]]; then
+  print -u2 "需要完整 Xcode 才能打包 FileMorrow，不能只用命令行工具。"
+  print -u2 "1. 从 App Store 安装 Xcode，打开一次并完成组件安装"
+  print -u2 "2. 运行: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer"
+  print -u2 "3. 再执行: ./Scripts/package-app.sh"
+  exit 1
+fi
+
 cd "$project_dir"
 swift build -c release
 
